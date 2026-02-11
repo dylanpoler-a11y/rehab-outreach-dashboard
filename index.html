@@ -1,0 +1,1562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rehab Outreach Command Center</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-primary: #0a0e1a;
+  --bg-secondary: #111827;
+  --bg-card: rgba(17, 24, 39, 0.8);
+  --bg-glass: rgba(255, 255, 255, 0.03);
+  --border: rgba(255, 255, 255, 0.06);
+  --border-bright: rgba(255, 255, 255, 0.12);
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent-blue: #3b82f6;
+  --accent-cyan: #06b6d4;
+  --accent-purple: #8b5cf6;
+  --accent-green: #10b981;
+  --accent-orange: #f59e0b;
+  --accent-red: #ef4444;
+  --accent-pink: #ec4899;
+  --glow-blue: rgba(59, 130, 246, 0.3);
+}
+
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 20%, rgba(59, 130, 246, 0.06), transparent),
+    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(139, 92, 246, 0.05), transparent),
+    radial-gradient(ellipse 50% 50% at 50% 50%, rgba(6, 182, 212, 0.03), transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.app { position: relative; z-index: 1; }
+
+/* Header */
+.header {
+  padding: 16px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(20px);
+  background: rgba(10, 14, 26, 0.9);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.header-left { display: flex; align-items: center; gap: 16px; }
+
+.logo {
+  width: 40px; height: 40px;
+  background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 900; font-size: 18px;
+  box-shadow: 0 0 20px var(--glow-blue);
+}
+
+.header h1 {
+  font-size: 20px; font-weight: 700;
+  background: linear-gradient(135deg, #fff, #94a3b8);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  letter-spacing: -0.5px;
+}
+
+.header-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.header-right { display: flex; align-items: center; gap: 12px; }
+
+.upload-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+  border: none; border-radius: 10px;
+  color: white; font-weight: 600; font-size: 13px;
+  cursor: pointer; transition: all 0.3s; font-family: inherit;
+}
+.upload-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 20px var(--glow-blue); }
+.upload-btn svg { width: 16px; height: 16px; }
+
+.live-badge {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 14px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 20px; font-size: 12px;
+  color: var(--accent-green); font-weight: 500;
+}
+
+.live-dot {
+  width: 6px; height: 6px; background: var(--accent-green);
+  border-radius: 50%; animation: pulse-dot 2s infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+  50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+}
+
+/* KPI Row */
+.kpi-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; padding: 20px 32px; }
+
+.kpi-card {
+  background: var(--bg-glass); border: 1px solid var(--border);
+  border-radius: 14px; padding: 16px; backdrop-filter: blur(10px);
+  transition: all 0.3s; position: relative; overflow: hidden;
+}
+.kpi-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0;
+  height: 2px; background: var(--kpi-color, var(--accent-blue)); opacity: 0.6;
+}
+.kpi-card:hover { border-color: var(--border-bright); transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
+.kpi-label { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+.kpi-value { font-size: 28px; font-weight: 800; letter-spacing: -1px; }
+.kpi-sub { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+
+/* Main layout */
+.main-content { display: grid; grid-template-columns: 260px 1fr; gap: 0; min-height: calc(100vh - 200px); }
+
+/* Sidebar */
+.sidebar {
+  border-right: 1px solid var(--border);
+  padding: 20px 16px; background: rgba(10, 14, 26, 0.5);
+  backdrop-filter: blur(10px); overflow-y: auto;
+  max-height: calc(100vh - 180px); position: sticky; top: 72px;
+}
+
+.filter-section { margin-bottom: 24px; }
+
+.filter-title {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+.filter-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+.filter-btn {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 8px 10px; background: transparent; border: 1px solid transparent;
+  border-radius: 8px; color: var(--text-secondary); font-size: 12px;
+  font-weight: 500; cursor: pointer; transition: all 0.2s;
+  font-family: inherit; text-align: left;
+}
+.filter-btn:hover { background: var(--bg-glass); border-color: var(--border); color: var(--text-primary); }
+.filter-btn.active { background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3); color: var(--accent-blue); }
+
+.filter-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+.filter-count {
+  margin-left: auto; font-size: 10px; font-weight: 600;
+  color: var(--text-muted); background: rgba(255,255,255,0.05);
+  padding: 2px 7px; border-radius: 6px;
+}
+.filter-btn.active .filter-count { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
+
+.search-wrap { position: relative; margin-bottom: 20px; }
+
+.search-input {
+  width: 100%; padding: 10px 12px 10px 36px;
+  background: var(--bg-glass); border: 1px solid var(--border);
+  border-radius: 10px; color: var(--text-primary); font-size: 13px;
+  font-family: inherit; outline: none; transition: border-color 0.2s;
+}
+.search-input:focus { border-color: var(--accent-blue); }
+.search-input::placeholder { color: var(--text-muted); }
+
+.search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); width: 14px; height: 14px; }
+
+/* Map */
+.map-area { display: flex; flex-direction: column; }
+
+.map-controls {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 24px; border-bottom: 1px solid var(--border);
+  background: rgba(10, 14, 26, 0.5);
+}
+
+.map-controls-left { display: flex; align-items: center; gap: 8px; }
+
+.view-toggle { display: flex; background: var(--bg-glass); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+
+.view-btn {
+  padding: 8px 16px; background: transparent; border: none;
+  color: var(--text-muted); font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: inherit; transition: all 0.2s;
+}
+.view-btn.active { background: var(--accent-blue); color: white; }
+
+.map-legend { display: flex; align-items: center; gap: 16px; font-size: 11px; color: var(--text-secondary); }
+.legend-item { display: flex; align-items: center; gap: 6px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid; }
+
+#mapWrapper { flex: 1; min-height: 520px; }
+#map { height: 100%; min-height: 520px; background: var(--bg-secondary); }
+
+.leaflet-container { background: var(--bg-secondary) !important; font-family: 'Inter', sans-serif !important; }
+
+.custom-marker { border-radius: 50%; transition: transform 0.2s; cursor: pointer; }
+.custom-marker:hover { transform: scale(1.3); }
+
+.ghost-marker { border-radius: 50%; cursor: pointer; animation: ghost-pulse 2s ease-in-out infinite; }
+@keyframes ghost-pulse {
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+.ghost-line { stroke-dasharray: 6 4; animation: ghost-dash 1s linear infinite; }
+@keyframes ghost-dash { to { stroke-dashoffset: -10; } }
+
+.state-label {
+  background: none !important; border: none !important; box-shadow: none !important;
+  color: rgba(255,255,255,0.35); font-size: 10px; font-weight: 700; font-family: 'Inter', sans-serif;
+  letter-spacing: 0.5px; text-align: center; white-space: nowrap; pointer-events: none;
+}
+.state-label-active {
+  color: rgba(59,130,246,0.8) !important; font-size: 11px;
+}
+
+.custom-popup .leaflet-popup-content-wrapper {
+  background: var(--bg-secondary) !important; color: var(--text-primary) !important;
+  border: 1px solid var(--border-bright) !important; border-radius: 14px !important;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5) !important; padding: 0 !important;
+}
+.custom-popup .leaflet-popup-tip { background: var(--bg-secondary) !important; border: 1px solid var(--border-bright) !important; }
+.custom-popup .leaflet-popup-close-btn { color: var(--text-muted) !important; font-size: 18px !important; top: 8px !important; right: 8px !important; }
+
+.popup-content { padding: 16px; min-width: 280px; max-width: 340px; }
+.popup-name { font-size: 15px; font-weight: 700; color: var(--text-primary); line-height: 1.3; }
+.popup-badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+.popup-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+.popup-row:last-child { border-bottom: none; }
+.popup-label { color: var(--text-muted); }
+.popup-val { color: var(--text-primary); font-weight: 600; max-width: 180px; text-align: right; }
+
+.popup-link {
+  display: inline-block; margin-top: 10px; padding: 6px 14px;
+  background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 8px; color: var(--accent-blue); font-size: 12px;
+  font-weight: 600; text-decoration: none; transition: all 0.2s;
+}
+.popup-link:hover { background: rgba(59, 130, 246, 0.25); }
+
+/* Charts section */
+.charts-section { padding: 24px 32px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+.chart-card {
+  background: var(--bg-glass); border: 1px solid var(--border);
+  border-radius: 16px; padding: 24px; backdrop-filter: blur(10px);
+}
+.chart-card.full-width { grid-column: 1 / -1; }
+
+.chart-title { font-size: 14px; font-weight: 700; margin-bottom: 16px; color: var(--text-primary); }
+.chart-subtitle { font-size: 11px; color: var(--text-muted); margin-top: -12px; margin-bottom: 16px; }
+
+/* Bar chart */
+.bar-chart { display: flex; flex-direction: column; gap: 8px; }
+.bar-row { display: flex; align-items: center; gap: 12px; }
+.bar-label { width: 120px; font-size: 12px; color: var(--text-secondary); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-track { flex: 1; height: 26px; background: rgba(255,255,255,0.03); border-radius: 6px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 6px; transition: width 1s ease; display: flex; align-items: center; padding-left: 10px; font-size: 11px; font-weight: 700; color: white; min-width: 30px; }
+.bar-value { font-size: 12px; font-weight: 700; color: var(--text-primary); width: 40px; text-align: right; }
+
+/* State filter pills (removed — now click states on the map) */
+
+/* Clickable bar rows */
+.bar-row.clickable { cursor: pointer; border-radius: 6px; padding: 2px 0; transition: background 0.2s; }
+.bar-row.clickable:hover { background: rgba(255,255,255,0.04); }
+.bar-row.clickable.active { background: rgba(59, 130, 246, 0.1); }
+.bar-row.clickable.active .bar-label { color: var(--accent-blue); font-weight: 700; }
+
+.state-filter-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;
+  background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.3);
+  color: var(--accent-blue); cursor: pointer; transition: all 0.2s;
+}
+.state-filter-badge:hover { background: rgba(59, 130, 246, 0.25); }
+.state-filter-badge svg { width: 12px; height: 12px; }
+
+.chart-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.chart-header .chart-title { margin-bottom: 0; }
+
+/* Donut */
+.donut-container { display: flex; align-items: center; gap: 32px; }
+.donut-svg { width: 160px; height: 160px; }
+.donut-legend { display: flex; flex-direction: column; gap: 8px; }
+.donut-legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+.donut-legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.donut-legend-value { margin-left: auto; font-weight: 700; color: var(--text-primary); }
+
+/* Funnel */
+.funnel { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+.funnel-step { width: 100%; display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+.funnel-bar { height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; color: white; transition: width 1s ease; min-width: 50px; }
+.funnel-info { display: flex; flex-direction: column; gap: 2px; }
+.funnel-label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.funnel-pct { font-size: 11px; color: var(--text-muted); }
+
+/* Pipeline section */
+.pipeline-section { padding: 0 32px 24px; }
+
+.pipeline-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.pipeline-header h2 {
+  font-size: 18px; font-weight: 800;
+  background: linear-gradient(135deg, var(--accent-orange), var(--accent-pink));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+
+.pipeline-stats { display: flex; gap: 16px; }
+
+.pipeline-stat {
+  padding: 6px 14px; border-radius: 10px;
+  background: var(--bg-glass); border: 1px solid var(--border);
+  font-size: 12px; color: var(--text-secondary);
+}
+.pipeline-stat strong { color: var(--text-primary); font-weight: 700; }
+
+.pipeline-board {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+}
+
+.pipeline-col {
+  background: var(--bg-glass); border: 1px solid var(--border);
+  border-radius: 14px; padding: 16px; min-height: 200px;
+}
+
+.pipeline-col-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border);
+}
+
+.pipeline-col-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+.pipeline-col-count {
+  width: 24px; height: 24px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 800;
+}
+
+.pipeline-card {
+  background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px; margin-bottom: 10px;
+  transition: all 0.2s; cursor: default;
+}
+.pipeline-card:hover { border-color: var(--border-bright); transform: translateY(-1px); }
+.pipeline-card-name { font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+.pipeline-card-detail { font-size: 11px; color: var(--text-muted); margin-bottom: 3px; }
+.pipeline-card-detail strong { color: var(--text-secondary); }
+
+.pipeline-card-priority {
+  display: inline-block; padding: 2px 8px; border-radius: 4px;
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; margin-top: 4px;
+}
+
+/* Monthly activity chart */
+.activity-chart { position: relative; height: 180px; }
+.activity-bars { display: flex; align-items: flex-end; gap: 3px; height: 150px; padding: 0 4px; }
+.activity-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+.activity-bar {
+  width: 100%; border-radius: 4px 4px 0 0;
+  background: linear-gradient(180deg, var(--accent-blue), var(--accent-cyan));
+  transition: height 0.8s ease; min-height: 2px; position: relative;
+}
+.activity-bar:hover { opacity: 0.8; }
+.activity-bar-label { font-size: 8px; color: var(--text-muted); transform: rotate(-45deg); white-space: nowrap; }
+.activity-bar-val { font-size: 9px; color: var(--text-secondary); font-weight: 600; }
+
+/* Table view */
+.table-container { display: none; padding: 0 24px 24px; overflow-x: auto; }
+
+.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.data-table th {
+  padding: 10px 12px; text-align: left; font-size: 10px;
+  font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--text-muted); border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,0.02); position: sticky; top: 0; cursor: pointer;
+}
+.data-table th:hover { color: var(--text-primary); }
+.data-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
+.data-table tr:hover td { background: rgba(59, 130, 246, 0.05); color: var(--text-primary); }
+
+.status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+
+/* Upload modal */
+.modal-overlay {
+  display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+  z-index: 2000; align-items: center; justify-content: center;
+}
+.modal-overlay.show { display: flex; }
+
+.modal {
+  background: var(--bg-secondary); border: 1px solid var(--border-bright);
+  border-radius: 20px; padding: 32px; width: 560px; max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.modal h2 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+.modal p { color: var(--text-secondary); font-size: 14px; margin-bottom: 24px; line-height: 1.5; }
+
+.drop-zone {
+  border: 2px dashed var(--border-bright); border-radius: 16px;
+  padding: 48px 24px; text-align: center; transition: all 0.3s;
+  cursor: pointer; margin-bottom: 20px;
+}
+.drop-zone.dragover { border-color: var(--accent-blue); background: rgba(59, 130, 246, 0.05); }
+
+.drop-zone-icon {
+  width: 48px; height: 48px; margin: 0 auto 16px;
+  background: rgba(59, 130, 246, 0.1); border-radius: 14px;
+  display: flex; align-items: center; justify-content: center; color: var(--accent-blue);
+}
+.drop-zone-text { font-size: 14px; color: var(--text-secondary); margin-bottom: 4px; }
+.drop-zone-hint { font-size: 12px; color: var(--text-muted); }
+
+.modal-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; }
+
+.btn-secondary {
+  padding: 10px 20px; background: var(--bg-glass); border: 1px solid var(--border);
+  border-radius: 10px; color: var(--text-secondary); font-weight: 600;
+  font-size: 13px; cursor: pointer; font-family: inherit;
+}
+
+.upload-status { padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; display: none; }
+.upload-status.success { display: block; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); color: var(--accent-green); }
+.upload-status.error { display: block; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: var(--accent-red); }
+
+/* Section dividers */
+.section-divider {
+  padding: 32px 32px 0;
+  display: flex; align-items: center; gap: 16px;
+}
+.section-divider h2 {
+  font-size: 16px; font-weight: 800; white-space: nowrap;
+}
+.section-divider::after {
+  content: ''; flex: 1; height: 1px;
+  background: linear-gradient(90deg, var(--border-bright), transparent);
+}
+
+/* Responsive */
+@media (max-width: 1400px) { .kpi-row { grid-template-columns: repeat(4, 1fr); } .pipeline-board { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 1200px) { .charts-section { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .main-content { grid-template-columns: 1fr; } .sidebar { position: static; max-height: none; border-right: none; border-bottom: 1px solid var(--border); } .kpi-row { grid-template-columns: repeat(2, 1fr); } .pipeline-board { grid-template-columns: 1fr; } }
+
+@keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.animate-in { animation: fadeUp 0.5s ease forwards; opacity: 0; }
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- Password Gate -->
+<div id="loginScreen" style="position:fixed;inset:0;z-index:99999;background:var(--bg-primary);display:flex;align-items:center;justify-content:center;">
+  <div style="text-align:center;max-width:380px;padding:40px;">
+    <div style="width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,var(--accent-blue),var(--accent-purple));display:flex;align-items:center;justify-content:center;margin:0 auto 24px;font-size:28px;font-weight:800;color:#fff;letter-spacing:-1px;">RC</div>
+    <h1 style="font-size:24px;font-weight:700;color:var(--text-primary);margin-bottom:8px;">Rehab Outreach Command Center</h1>
+    <p style="color:var(--text-secondary);margin-bottom:32px;font-size:14px;">Enter password to access the dashboard</p>
+    <div style="position:relative;">
+      <input id="loginPassword" type="password" placeholder="Password" autofocus
+        style="width:100%;padding:14px 18px;border-radius:12px;border:1px solid var(--border-bright);background:var(--bg-card);color:var(--text-primary);font-size:15px;font-family:Inter,sans-serif;outline:none;transition:border 0.2s;"
+        onfocus="this.style.borderColor='var(--accent-blue)'" onblur="this.style.borderColor='var(--border-bright)'" />
+    </div>
+    <div id="loginError" style="color:var(--accent-red);font-size:13px;margin-top:12px;height:18px;"></div>
+    <button id="loginBtn" onclick="tryLogin()"
+      style="width:100%;margin-top:8px;padding:14px;border-radius:12px;border:none;background:linear-gradient(135deg,var(--accent-blue),var(--accent-purple));color:#fff;font-size:15px;font-weight:600;font-family:Inter,sans-serif;cursor:pointer;transition:opacity 0.2s;"
+      onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Enter</button>
+  </div>
+</div>
+
+<script>
+const _PH = '649b6bded590b8adc12ee23d71757e8e3915418d7379d427a4f52bd2f04e9f42';
+async function _hash(s) {
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(d)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+async function tryLogin() {
+  const pw = document.getElementById('loginPassword').value;
+  const h = await _hash(pw);
+  if (h === _PH) {
+    sessionStorage.setItem('_auth', '1');
+    document.getElementById('loginScreen').style.display = 'none';
+  } else {
+    document.getElementById('loginError').textContent = 'Incorrect password';
+    document.getElementById('loginPassword').value = '';
+    document.getElementById('loginPassword').focus();
+  }
+}
+document.addEventListener('DOMContentLoaded', () => {
+  if (sessionStorage.getItem('_auth') === '1') {
+    document.getElementById('loginScreen').style.display = 'none';
+  }
+  document.getElementById('loginPassword').addEventListener('keydown', e => {
+    if (e.key === 'Enter') tryLogin();
+  });
+});
+</script>
+
+<div class="app">
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">RC</div>
+      <div>
+        <h1>Rehab Outreach Command Center</h1>
+        <div class="header-subtitle">Cold outreach analytics & acquisition pipeline</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="live-badge">
+        <div class="live-dot"></div>
+        <span id="companyCount">0</span> Companies &middot; <span id="messageCount">0</span> Messages
+      </div>
+      <button class="upload-btn" onclick="openUploadModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+        Upload CSV
+      </button>
+    </div>
+  </header>
+
+  <!-- KPI Row -->
+  <div class="kpi-row" id="kpiRow"></div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="search-wrap">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" class="search-input" id="searchInput" placeholder="Search companies...">
+      </div>
+      <div class="filter-section"><div class="filter-title">Pipeline Stage</div><div id="pipelineFilters"></div></div>
+      <div class="filter-section"><div class="filter-title">Outreach Status</div><div id="outreachFilters"></div></div>
+      <div class="filter-section"><div class="filter-title">Ownership</div><div id="ownershipFilters"></div></div>
+      <div class="filter-section"><div class="filter-title">Outreach Channel</div><div id="mediumFilters"></div></div>
+      <div class="filter-section"><div class="filter-title">Sent By</div><div id="accountFilters"></div></div>
+    </aside>
+
+    <!-- Map + Charts -->
+    <div class="map-area">
+      <div class="map-controls">
+        <div class="map-controls-left">
+          <div class="view-toggle">
+            <button class="view-btn active" onclick="setView('map')">Map</button>
+            <button class="view-btn" onclick="setView('table')">Table</button>
+          </div>
+        </div>
+        <div class="map-legend" id="mapLegend"></div>
+      </div>
+
+      <!-- Map with floating state filter badge -->
+      <div id="mapWrapper" style="position:relative">
+        <div id="map"></div>
+        <div id="stateFilterOverlay" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:999;pointer-events:auto;display:none">
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:rgba(10,14,26,0.9);border:1px solid rgba(59,130,246,0.4);border-radius:12px;backdrop-filter:blur(10px)">
+            <span id="stateFilterLabel" style="font-size:12px;font-weight:600;color:var(--accent-blue)"></span>
+            <button onclick="clearStateFilter()" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;font-size:11px;font-weight:600;padding:3px 10px;border-radius:8px;cursor:pointer;font-family:inherit">Clear</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-container" id="tableContainer"></div>
+
+      <!-- Pipeline Board -->
+      <div class="pipeline-section" id="pipelineSection">
+        <div class="pipeline-header">
+          <h2>Acquisition Pipeline</h2>
+          <div class="pipeline-stats" id="pipelineStats"></div>
+        </div>
+        <div class="pipeline-board" id="pipelineBoard"></div>
+      </div>
+
+      <!-- Charts -->
+      <div class="charts-section" id="chartsSection">
+        <div class="chart-card animate-in">
+          <div class="chart-title">Outreach Funnel</div>
+          <div class="funnel" id="funnelChart"></div>
+        </div>
+        <div class="chart-card animate-in">
+          <div class="chart-title">Ownership Breakdown</div>
+          <div class="donut-container" id="ownershipDonut"></div>
+        </div>
+        <div class="chart-card animate-in">
+          <div class="chart-header">
+            <div class="chart-title">Top States — Click Map or Bars to Filter</div>
+            <div id="stateFilterBadge"></div>
+          </div>
+          <div class="bar-chart" id="stateBarChart"></div>
+        </div>
+        <div class="chart-card animate-in">
+          <div class="chart-title">Messages by Channel</div>
+          <div class="bar-chart" id="mediumBarChart"></div>
+        </div>
+        <div class="chart-card full-width animate-in">
+          <div class="chart-title">Monthly Outreach Activity</div>
+          <div class="activity-chart" id="activityChart"></div>
+        </div>
+        <div class="chart-card animate-in">
+          <div class="chart-title">Messages by Team Member</div>
+          <div class="bar-chart" id="accountBarChart"></div>
+        </div>
+        <div class="chart-card animate-in">
+          <div class="chart-title">State Tier Distribution</div>
+          <div class="donut-container" id="tierDonut"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Upload Modal -->
+<div class="modal-overlay" id="uploadModal">
+  <div class="modal">
+    <h2>Upload New CSV Data</h2>
+    <p>Upload your Grid View CSV (message-level export from your outreach CRM). Each row should be a message with columns like Company, Date Sent, Message Medium, Responded, Scheduled Intro Call, Assisted Meeting, etc.</p>
+    <div class="drop-zone" id="dropZone">
+      <div class="drop-zone-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+      </div>
+      <div class="drop-zone-text">Drop your CSV file here or click to browse</div>
+      <div class="drop-zone-hint">Supports .csv files (Grid View export format)</div>
+    </div>
+    <input type="file" id="fileInput" accept=".csv" style="display:none">
+    <div class="upload-status" id="uploadStatus"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeUploadModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ============================================================
+// DATA & STATE
+// ============================================================
+let DATA = { companies: [], pipeline: [], actions: [], meta: {} };
+let filteredData = [];
+let map, markersLayer, ghostLayer, statesLayer;
+let activeGhostCompany = null;
+let stateGeoData = null;
+
+const activeFilters = { search: '', pipeline: new Set(), status: new Set(), state: new Set(), ownership: new Set(), medium: new Set(), account: new Set() };
+
+const OWNERSHIP_COLORS = { "Mom 'n Pop": '#10b981', 'Private Equity': '#8b5cf6', 'Publicly Traded': '#3b82f6', 'Non-Profit': '#f59e0b', 'CLOSED': '#ef4444', 'GOV': '#64748b' };
+const PIPELINE_COLUMNS = [
+  { key: 'Active', match: s => s.startsWith('Active'), color: 'var(--accent-green)', bg: 'rgba(16,185,129,0.1)' },
+  { key: 'New Lead', match: s => s === 'New Lead', color: 'var(--accent-cyan)', bg: 'rgba(6,182,212,0.1)' },
+  { key: 'Stand By', match: s => s === 'Stand By', color: 'var(--accent-orange)', bg: 'rgba(245,158,11,0.1)' },
+  { key: 'Stalled', match: s => s === 'Stalled', color: 'var(--accent-red)', bg: 'rgba(239,68,68,0.1)' },
+  { key: 'Due Diligence', match: s => s.includes('Due Diligence') || s.includes('Placing Bid'), color: 'var(--accent-purple)', bg: 'rgba(139,92,246,0.1)' },
+];
+const PRIORITY_COLORS = { '1 - High': { bg: 'rgba(239,68,68,0.15)', color: '#ef4444' }, '2 - Medium': { bg: 'rgba(245,158,11,0.15)', color: '#f59e0b' }, '3 - Low': { bg: 'rgba(100,116,139,0.15)', color: '#94a3b8' } };
+
+// ============================================================
+// INIT
+// ============================================================
+async function init() {
+  try { const resp = await fetch('data.json'); DATA = await resp.json(); } catch (e) { DATA = { companies: [], pipeline: [], actions: [], meta: {} }; }
+  initMap();
+  buildFilters();
+  applyFilters();
+  renderPipeline();
+}
+
+// ============================================================
+// MAP
+// ============================================================
+function initMap() {
+  map = L.map('map', { center: [36, -96], zoom: 4, attributionControl: false, minZoom: 3 });
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
+  statesLayer = L.layerGroup().addTo(map);
+  markersLayer = L.layerGroup().addTo(map);
+  ghostLayer = L.layerGroup().addTo(map);
+  map.on('popupclose', () => clearGhostMarkers());
+
+  // Load US state boundaries GeoJSON
+  fetch('https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json')
+    .then(r => r.json())
+    .then(geo => {
+      stateGeoData = geo;
+      renderStateBoundaries();
+    })
+    .catch(() => console.log('Could not load state boundaries'));
+}
+
+let _stateGeoLayer = null;
+function renderStateBoundaries() {
+  if (!stateGeoData) return;
+
+  if (!_stateGeoLayer) {
+    // First call: create the layer once
+    _stateGeoLayer = L.geoJSON(stateGeoData, {
+      style: feature => getStateStyle(feature.properties.name),
+      onEachFeature: (feature, layer) => {
+        const name = feature.properties.name;
+        layer._stateName = name;
+        layer.on({
+          mouseover: e => {
+            if (!activeFilters.state.has(name)) {
+              e.target.setStyle({ fillColor: 'rgba(59, 130, 246, 0.12)', color: 'rgba(59, 130, 246, 0.3)', weight: 1.5 });
+            }
+          },
+          mouseout: e => {
+            if (!activeFilters.state.has(name)) {
+              e.target.setStyle(getStateStyle(name));
+            }
+          },
+          click: e => {
+            L.DomEvent.stopPropagation(e);
+            toggleStateFilter(name);
+          }
+        });
+      }
+    });
+    statesLayer.addLayer(_stateGeoLayer);
+  } else {
+    // Subsequent calls: just update styles in place
+    _stateGeoLayer.eachLayer(layer => {
+      if (layer._stateName) layer.setStyle(getStateStyle(layer._stateName));
+    });
+  }
+}
+
+function getStateStyle(name) {
+  const isActive = activeFilters.state.has(name);
+  return {
+    fillColor: isActive ? 'rgba(59, 130, 246, 0.25)' : 'rgba(255, 255, 255, 0.02)',
+    fillOpacity: 1,
+    color: isActive ? 'rgba(59, 130, 246, 0.6)' : 'rgba(255, 255, 255, 0.08)',
+    weight: isActive ? 2 : 0.5,
+  };
+}
+
+function updateStateFilterOverlay() {
+  const overlay = document.getElementById('stateFilterOverlay');
+  const label = document.getElementById('stateFilterLabel');
+  if (activeFilters.state.size > 0) {
+    const names = Array.from(activeFilters.state);
+    const abbrs = names.map(n => STATE_NAME_TO_ABBR[n] || n);
+    label.textContent = 'Filtered: ' + abbrs.join(', ');
+    overlay.style.display = 'block';
+  } else {
+    overlay.style.display = 'none';
+  }
+}
+
+function updateMap() {
+  markersLayer.clearLayers();
+  if (ghostLayer) ghostLayer.clearLayers();
+  activeGhostCompany = null;
+  filteredData.forEach(c => {
+    if (!c.lat || !c.lng) return;
+    const color = OWNERSHIP_COLORS[c.ownership] || '#64748b';
+    const size = c.inPipeline ? 16 : c.assistedMeeting ? 14 : c.scheduledIntro ? 12 : c.responded ? 10 : 7;
+    const glow = c.inPipeline ? 16 : c.assistedMeeting ? 12 : 6;
+
+    const icon = L.divIcon({
+      className: 'custom-marker',
+      html: `<div style="width:${size}px;height:${size}px;background:${color};border-radius:50%;border:2px solid rgba(255,255,255,${c.inPipeline ? 0.8 : 0.4});box-shadow:0 0 ${glow}px ${color}80;"></div>`,
+      iconSize: [size, size], iconAnchor: [size/2, size/2]
+    });
+
+    const marker = L.marker([c.lat, c.lng], { icon }).addTo(markersLayer);
+
+    let statusBadge = '';
+    if (c.inPipeline) statusBadge = `<span class="popup-badge" style="background:rgba(236,72,153,0.15);color:#ec4899">In Pipeline</span>`;
+    else if (c.notInterested) statusBadge = `<span class="popup-badge" style="background:rgba(239,68,68,0.15);color:#ef4444">Not Interested</span>`;
+    else if (c.assistedMeeting) statusBadge = `<span class="popup-badge" style="background:rgba(16,185,129,0.15);color:#10b981">Assisted Meeting</span>`;
+    else if (c.scheduledIntro) statusBadge = `<span class="popup-badge" style="background:rgba(139,92,246,0.15);color:#8b5cf6">Intro Scheduled</span>`;
+    else if (c.responded) statusBadge = `<span class="popup-badge" style="background:rgba(59,130,246,0.15);color:#3b82f6">Responded</span>`;
+    else if (c.msgsSent > 0) statusBadge = `<span class="popup-badge" style="background:rgba(245,158,11,0.15);color:#f59e0b">Contacted</span>`;
+    else statusBadge = `<span class="popup-badge" style="background:rgba(100,116,139,0.15);color:#94a3b8">Not Contacted</span>`;
+
+    const ownershipBadge = c.ownership ? `<span class="popup-badge" style="background:${color}22;color:${color}">${c.ownership}</span>` : '';
+
+    const mediums = c.byMedium ? Object.entries(c.byMedium).map(([k,v]) => `${k}: ${v}`).join(', ') : '';
+
+    const popup = L.popup({ className: 'custom-popup', maxWidth: 360 }).setContent(`
+      <div class="popup-content">
+        <div style="margin-bottom:10px">
+          <div class="popup-name">${c.name}</div>
+          <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${ownershipBadge} ${statusBadge}</div>
+        </div>
+        ${c.address ? `<div class="popup-row"><span class="popup-label">Address</span><span class="popup-val">${c.address}</span></div>` : ''}
+        <div class="popup-row"><span class="popup-label">HQ State</span><span class="popup-val">${c.fullState || c.state || 'N/A'}</span></div>
+        ${c.allStates && c.allStates.includes(',') ? `<div class="popup-row"><span class="popup-label">Operating In</span><span class="popup-val" style="font-size:11px">${c.allStates}</span></div>` : ''}
+        <div class="popup-row"><span class="popup-label">Messages Sent</span><span class="popup-val">${c.msgsSent}</span></div>
+        ${mediums ? `<div class="popup-row"><span class="popup-label">Channels</span><span class="popup-val">${mediums}</span></div>` : ''}
+        <div class="popup-row"><span class="popup-label">Contacts Reached</span><span class="popup-val">${c.contactCount}</span></div>
+        <div class="popup-row"><span class="popup-label">Responded</span><span class="popup-val">${c.responded ? 'Yes (' + c.respondedCount + ')' : 'No'}</span></div>
+        <div class="popup-row"><span class="popup-label">Intro Call</span><span class="popup-val">${c.scheduledIntro ? 'Scheduled' : 'No'}</span></div>
+        <div class="popup-row"><span class="popup-label">Assisted Meeting</span><span class="popup-val">${c.assistedMeeting ? 'Yes' : 'No'}</span></div>
+        ${c.firstMsg ? `<div class="popup-row"><span class="popup-label">First Outreach</span><span class="popup-val">${c.firstMsg}</span></div>` : ''}
+        ${c.lastMsg ? `<div class="popup-row"><span class="popup-label">Last Outreach</span><span class="popup-val">${c.lastMsg}</span></div>` : ''}
+        ${c.pipelineStatus ? `<div class="popup-row"><span class="popup-label">Pipeline</span><span class="popup-val">${c.pipelineStatus}</span></div>` : ''}
+        ${c.website ? `<a class="popup-link" href="${c.website}" target="_blank">Visit Website &rarr;</a>` : ''}
+      </div>
+    `);
+    marker.bindPopup(popup);
+    marker.on('click', () => showOperatingStates(c, color));
+  });
+}
+
+function clearGhostMarkers() {
+  ghostLayer.clearLayers();
+  activeGhostCompany = null;
+}
+
+function showOperatingStates(company, hqColor) {
+  clearGhostMarkers();
+  if (!company.allStates || !company.allStates.includes(',')) return;
+  if (!company.lat || !company.lng) return;
+
+  activeGhostCompany = company.name;
+  const hqState = (company.fullState || company.state || '').trim();
+  const states = company.allStates.split(',').map(s => s.trim()).filter(s => s);
+
+  // Build reverse lookup: abbreviation -> full name
+  const ABBREV_TO_FULL = {};
+  Object.entries(STATE_ABBREV_JS).forEach(([full, ab]) => { ABBREV_TO_FULL[ab] = full; });
+
+  states.forEach(stateName => {
+    // Skip the HQ state — it already has the main dot
+    if (stateName === hqState) return;
+    // Also skip if abbreviation matches HQ state abbreviation
+    const hqAbbr = STATE_ABBREV_JS[hqState] || hqState;
+    // Resolve to abbreviation to get coords (handle both full names and abbreviations)
+    let abbr = stateName;
+    let displayName = stateName;
+    if (stateName.length > 2) {
+      abbr = STATE_ABBREV_JS[stateName] || stateName;
+      displayName = stateName;
+    } else {
+      abbr = stateName.toUpperCase();
+      displayName = ABBREV_TO_FULL[abbr] || stateName;
+    }
+    if (abbr.length > 2) return; // couldn't resolve
+    if (abbr === hqAbbr) return; // skip HQ state
+    const coords = STATE_COORDS_JS[abbr];
+    if (!coords) return;
+
+    // Draw a dashed line from HQ to the state center
+    const line = L.polyline(
+      [[company.lat, company.lng], coords],
+      { color: hqColor, weight: 1.5, opacity: 0.4, dashArray: '6 4', className: 'ghost-line' }
+    );
+    ghostLayer.addLayer(line);
+
+    // Place a ghost marker at state center
+    const ghostIcon = L.divIcon({
+      className: 'ghost-marker',
+      html: `<div style="width:14px;height:14px;background:${hqColor};border-radius:50%;border:2px dashed rgba(255,255,255,0.6);box-shadow:0 0 12px ${hqColor}60;display:flex;align-items:center;justify-content:center"><div style="width:4px;height:4px;background:white;border-radius:50%"></div></div>`,
+      iconSize: [14, 14], iconAnchor: [7, 7]
+    });
+
+    const ghostMarker = L.marker(coords, { icon: ghostIcon }).addTo(ghostLayer);
+    ghostMarker.bindPopup(L.popup({ className: 'custom-popup', maxWidth: 260 }).setContent(`
+      <div class="popup-content" style="padding:12px;min-width:200px">
+        <div class="popup-name" style="font-size:13px">${company.name}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Also operates in <strong style="color:var(--text-primary)">${displayName}</strong></div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">HQ: ${company.fullState || company.state}</div>
+      </div>
+    `));
+  });
+}
+
+// ============================================================
+// FILTERS
+// ============================================================
+function buildFilters() {
+  const companies = DATA.companies;
+
+  // Pipeline stage filters — counts from DATA.pipeline (the Kanban source), not companies
+  const pipe = DATA.pipeline || [];
+  const pipelineStages = [
+    { key: 'active', label: 'Active', color: '#10b981', count: pipe.filter(p => p.status.startsWith('Active')).length },
+    { key: 'new_lead', label: 'New Lead', color: '#06b6d4', count: pipe.filter(p => p.status === 'New Lead').length },
+    { key: 'stand_by', label: 'Stand By', color: '#f59e0b', count: pipe.filter(p => p.status === 'Stand By').length },
+    { key: 'stalled', label: 'Stalled', color: '#ef4444', count: pipe.filter(p => p.status === 'Stalled').length },
+    { key: 'due_diligence', label: 'Due Diligence', color: '#8b5cf6', count: pipe.filter(p => p.status.includes('Due Diligence') || p.status.includes('Placing Bid')).length },
+  ];
+  const pipeEl = document.getElementById('pipelineFilters');
+  pipelineStages.forEach(item => {
+    const btn = document.createElement('button');
+    btn.className = 'filter-btn';
+    btn.innerHTML = `<span class="filter-dot" style="background:${item.color}"></span>${item.label}<span class="filter-count">${item.count}</span>`;
+    btn.addEventListener('click', () => {
+      if (activeFilters.pipeline.has(item.key)) {
+        activeFilters.pipeline.delete(item.key);
+        btn.classList.remove('active');
+      } else {
+        activeFilters.pipeline.add(item.key);
+        btn.classList.add('active');
+      }
+      applyFilters();
+    });
+    pipeEl.appendChild(btn);
+  });
+
+  // Outreach status filters
+  const statuses = [
+    { key: 'assisted', label: 'Assisted Meeting', color: '#10b981', fn: c => c.assistedMeeting },
+    { key: 'scheduled', label: 'Intro Scheduled', color: '#8b5cf6', fn: c => c.scheduledIntro && !c.assistedMeeting },
+    { key: 'responded', label: 'Responded', color: '#3b82f6', fn: c => c.responded && !c.scheduledIntro },
+    { key: 'contacted', label: 'Contacted (No Reply)', color: '#f59e0b', fn: c => c.msgsSent > 0 && !c.responded },
+    { key: 'not_interested', label: 'Not Interested', color: '#ef4444', fn: c => c.notInterested },
+    { key: 'follow_up', label: 'Follow Up Later', color: '#f97316', fn: c => c.followUpLater },
+    { key: 'overridden', label: 'Overridden (Bad Fit)', color: '#6b7280', fn: c => c.override },
+  ];
+  renderFilterGroup('outreachFilters', statuses, 'status', companies);
+
+  // Ownership
+  const ownerships = Object.keys(OWNERSHIP_COLORS).map(k => ({
+    key: k, label: k, color: OWNERSHIP_COLORS[k], fn: c => c.ownership === k
+  })).filter(o => companies.some(o.fn));
+  renderFilterGroup('ownershipFilters', ownerships, 'ownership', companies);
+
+  // Medium
+  const mediums = Object.entries(DATA.meta.mediumCounts || {}).sort((a,b) => b[1]-a[1]).map(([k]) => ({
+    key: k, label: k, color: 'var(--accent-cyan)', fn: c => c.byMedium && c.byMedium[k] > 0
+  }));
+  renderFilterGroup('mediumFilters', mediums, 'medium', companies);
+
+  // Account
+  const accounts = Object.entries(DATA.meta.accountCounts || {}).sort((a,b) => b[1]-a[1]).map(([k]) => ({
+    key: k, label: k, color: 'var(--accent-purple)', fn: c => c.byAccount && c.byAccount[k] > 0
+  }));
+  renderFilterGroup('accountFilters', accounts, 'account', companies);
+
+  document.getElementById('searchInput').addEventListener('input', e => {
+    activeFilters.search = e.target.value.toLowerCase();
+    applyFilters();
+  });
+}
+
+function renderFilterGroup(containerId, items, filterType, companies) {
+  const el = document.getElementById(containerId);
+  items.forEach(item => {
+    const count = companies.filter(item.fn).length;
+    const btn = document.createElement('button');
+    btn.className = 'filter-btn';
+    btn.innerHTML = `<span class="filter-dot" style="background:${item.color}"></span>${item.label}<span class="filter-count">${count}</span>`;
+    btn.addEventListener('click', () => {
+      if (activeFilters[filterType].has(item.key)) {
+        activeFilters[filterType].delete(item.key);
+        btn.classList.remove('active');
+      } else {
+        activeFilters[filterType].add(item.key);
+        btn.classList.add('active');
+      }
+      applyFilters();
+    });
+    el.appendChild(btn);
+  });
+}
+
+function applyFilters() {
+  filteredData = DATA.companies.filter(c => {
+    if (activeFilters.search && !c.name.toLowerCase().includes(activeFilters.search) &&
+        !(c.address || '').toLowerCase().includes(activeFilters.search) &&
+        !(c.fullState || '').toLowerCase().includes(activeFilters.search) &&
+        !(c.allStates || '').toLowerCase().includes(activeFilters.search)) return false;
+
+    if (activeFilters.pipeline.size > 0) {
+      let m = false;
+      if (activeFilters.pipeline.has('active') && c.inPipeline && c.pipelineStatus.startsWith('Active')) m = true;
+      if (activeFilters.pipeline.has('new_lead') && c.inPipeline && c.pipelineStatus === 'New Lead') m = true;
+      if (activeFilters.pipeline.has('stand_by') && c.inPipeline && c.pipelineStatus === 'Stand By') m = true;
+      if (activeFilters.pipeline.has('stalled') && c.inPipeline && c.pipelineStatus === 'Stalled') m = true;
+      if (activeFilters.pipeline.has('due_diligence') && c.inPipeline && (c.pipelineStatus.includes('Due Diligence') || c.pipelineStatus.includes('Placing Bid'))) m = true;
+      if (!m) return false;
+    }
+
+    if (activeFilters.status.size > 0) {
+      let m = false;
+      if (activeFilters.status.has('assisted') && c.assistedMeeting) m = true;
+      if (activeFilters.status.has('scheduled') && c.scheduledIntro && !c.assistedMeeting) m = true;
+      if (activeFilters.status.has('responded') && c.responded && !c.scheduledIntro) m = true;
+      if (activeFilters.status.has('contacted') && c.msgsSent > 0 && !c.responded) m = true;
+      if (activeFilters.status.has('not_interested') && c.notInterested) m = true;
+      if (activeFilters.status.has('follow_up') && c.followUpLater) m = true;
+      if (activeFilters.status.has('overridden') && c.override) m = true;
+      if (!m) return false;
+    }
+
+    if (activeFilters.state.size > 0 && !activeFilters.state.has(c.fullState || c.state)) return false;
+
+    if (activeFilters.ownership.size > 0 && !activeFilters.ownership.has(c.ownership)) return false;
+
+    if (activeFilters.medium.size > 0) {
+      let m = false;
+      for (const med of activeFilters.medium) { if (c.byMedium && c.byMedium[med] > 0) { m = true; break; } }
+      if (!m) return false;
+    }
+
+    if (activeFilters.account.size > 0) {
+      let m = false;
+      for (const acct of activeFilters.account) { if (c.byAccount && c.byAccount[acct] > 0) { m = true; break; } }
+      if (!m) return false;
+    }
+
+    return true;
+  });
+
+  updateAll();
+}
+
+function updateAll() {
+  document.getElementById('companyCount').textContent = filteredData.length;
+  document.getElementById('messageCount').textContent = filteredData.reduce((s, c) => s + c.msgsSent, 0).toLocaleString();
+  updateKPIs();
+  updateMap();
+  updateCharts();
+  updateTable();
+  updateLegend();
+}
+
+// ============================================================
+// KPIs
+// ============================================================
+function updateKPIs() {
+  const d = filteredData;
+  const totalMsgs = d.reduce((s, c) => s + c.msgsSent, 0);
+  const contacted = d.filter(c => c.msgsSent > 0).length;
+  const responded = d.filter(c => c.responded).length;
+  const scheduledIntro = d.filter(c => c.scheduledIntro).length;
+  const assistedMeeting = d.filter(c => c.assistedMeeting).length;
+  const inPipeline = d.filter(c => c.inPipeline).length;
+  const respRate = contacted > 0 ? ((responded/contacted)*100).toFixed(1) : '0';
+
+  const kpis = [
+    { label: 'Companies Reached', value: d.length, color: 'var(--accent-blue)', sub: `${contacted} contacted` },
+    { label: 'Total Messages', value: totalMsgs, color: 'var(--accent-cyan)', sub: `Across ${contacted} companies` },
+    { label: 'Responses', value: responded, color: 'var(--accent-green)', sub: `${respRate}% response rate` },
+    { label: 'Intros Scheduled', value: scheduledIntro, color: 'var(--accent-purple)', sub: `${d.length > 0 ? ((scheduledIntro/d.length)*100).toFixed(1) : '0'}% of companies reached` },
+    { label: 'Assisted Meetings', value: assistedMeeting, color: 'var(--accent-orange)', sub: `${scheduledIntro > 0 ? ((assistedMeeting/scheduledIntro)*100).toFixed(0) : 0}% of intros` },
+    { label: 'In Pipeline', value: inPipeline, color: 'var(--accent-pink)', sub: `Active deals` },
+    { label: 'Not Interested', value: d.filter(c => c.notInterested).length, color: 'var(--accent-red)', sub: `${d.filter(c => c.followUpLater).length} follow up later` },
+  ];
+
+  document.getElementById('kpiRow').innerHTML = kpis.map((k, i) => `
+    <div class="kpi-card animate-in" style="--kpi-color:${k.color};animation-delay:${i*0.04}s">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value" style="color:${k.color}">${k.value.toLocaleString()}</div>
+      <div class="kpi-sub">${k.sub}</div>
+    </div>
+  `).join('');
+}
+
+// ============================================================
+// PIPELINE BOARD
+// ============================================================
+function renderPipeline() {
+  const pipe = DATA.pipeline;
+  if (!pipe || pipe.length === 0) { document.getElementById('pipelineSection').style.display = 'none'; return; }
+
+  const active = pipe.filter(p => p.status.startsWith('Active')).length;
+  const standby = pipe.filter(p => p.status === 'Stand By').length;
+  const stalled = pipe.filter(p => p.status === 'Stalled').length;
+  const newLeads = pipe.filter(p => p.status === 'New Lead').length;
+
+  document.getElementById('pipelineStats').innerHTML = `
+    <div class="pipeline-stat"><strong>${pipe.length}</strong> Total Deals</div>
+    <div class="pipeline-stat"><strong>${active}</strong> Active</div>
+    <div class="pipeline-stat"><strong>${standby}</strong> Stand By</div>
+    <div class="pipeline-stat"><strong>${newLeads}</strong> New Leads</div>
+    <div class="pipeline-stat"><strong>${stalled}</strong> Stalled</div>
+  `;
+
+  document.getElementById('pipelineBoard').innerHTML = PIPELINE_COLUMNS.map(col => {
+    const deals = pipe.filter(p => col.match(p.status));
+    return `
+      <div class="pipeline-col">
+        <div class="pipeline-col-header">
+          <div class="pipeline-col-title" style="color:${col.color}">${col.key}</div>
+          <div class="pipeline-col-count" style="background:${col.bg};color:${col.color}">${deals.length}</div>
+        </div>
+        ${deals.map(d => {
+          const pc = PRIORITY_COLORS[d.priority] || PRIORITY_COLORS['3 - Low'];
+          return `
+            <div class="pipeline-card">
+              <div class="pipeline-card-name">${d.name}</div>
+              <div class="pipeline-card-detail"><strong>States:</strong> ${d.states}</div>
+              <div class="pipeline-card-detail"><strong>Type:</strong> ${d.type}</div>
+              ${d.ndaStatus !== 'N/A' && d.ndaStatus !== 'Not Started' ? `<div class="pipeline-card-detail"><strong>NDA:</strong> ${d.ndaStatus}</div>` : ''}
+              ${d.siteVisit !== 'N/A' && d.siteVisit !== 'Visit TBD' ? `<div class="pipeline-card-detail"><strong>Site Visit:</strong> ${d.siteVisit}</div>` : ''}
+              ${d.keyContact ? `<div class="pipeline-card-detail"><strong>Contact:</strong> ${d.keyContact}</div>` : ''}
+              ${d.nextAction ? `<div class="pipeline-card-detail" style="color:var(--text-secondary);margin-top:4px">${d.nextAction.substring(0, 80)}${d.nextAction.length > 80 ? '...' : ''}</div>` : ''}
+              <span class="pipeline-card-priority" style="background:${pc.bg};color:${pc.color}">${d.priority}</span>
+              ${d.status !== col.key ? `<span class="pipeline-card-priority" style="background:${col.bg};color:${col.color};margin-left:4px">${d.status}</span>` : ''}
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }).join('');
+}
+
+// ============================================================
+// CHARTS
+// ============================================================
+function updateCharts() {
+  updateFunnel();
+  updateOwnershipDonut();
+  updateStateChart();
+  updateMediumChart();
+  updateAccountChart();
+  updateTierDonut();
+  updateActivityChart();
+}
+
+function updateFunnel() {
+  const d = filteredData;
+  const total = d.length;
+  const contacted = d.filter(c => c.msgsSent > 0).length;
+  const responded = d.filter(c => c.responded).length;
+  const scheduled = d.filter(c => c.scheduledIntro).length;
+  const assisted = d.filter(c => c.assistedMeeting).length;
+  const pipeline = d.filter(c => c.inPipeline).length;
+
+  const steps = [
+    { label: 'Total Companies', value: total, color: 'var(--accent-blue)', pct: '100%' },
+    { label: 'Contacted', value: contacted, color: 'var(--accent-cyan)', pct: total > 0 ? ((contacted/total)*100).toFixed(1)+'%' : '0%' },
+    { label: 'Responded', value: responded, color: 'var(--accent-green)', pct: contacted > 0 ? ((responded/contacted)*100).toFixed(1)+'% of contacted' : '0%' },
+    { label: 'Intro Scheduled', value: scheduled, color: 'var(--accent-purple)', pct: responded > 0 ? ((scheduled/responded)*100).toFixed(1)+'% of responded' : '0%' },
+    { label: 'Assisted Meeting', value: assisted, color: 'var(--accent-orange)', pct: scheduled > 0 ? ((assisted/scheduled)*100).toFixed(1)+'% of scheduled' : '0%' },
+    { label: 'In Pipeline', value: pipeline, color: 'var(--accent-pink)', pct: assisted > 0 ? ((pipeline/assisted)*100).toFixed(1)+'% of meetings' : '0%' },
+  ];
+  const maxVal = Math.max(...steps.map(s => s.value), 1);
+  document.getElementById('funnelChart').innerHTML = steps.map(s => `
+    <div class="funnel-step">
+      <div class="funnel-bar" style="width:${Math.max((s.value/maxVal)*100, 10)}%;background:${s.color}">${s.value}</div>
+      <div class="funnel-info"><div class="funnel-label">${s.label}</div><div class="funnel-pct">${s.pct}</div></div>
+    </div>
+  `).join('');
+}
+
+function makeDonut(containerId, data, colors) {
+  const total = data.reduce((a, b) => a + b[1], 0) || 1;
+  let cumAngle = 0;
+  const segments = data.map(([key, val], i) => {
+    const angle = (val / total) * 360;
+    const s = { key, val, color: colors[i % colors.length], startAngle: cumAngle, angle };
+    cumAngle += angle;
+    return s;
+  });
+
+  const svgPaths = segments.map(s => {
+    if (s.angle <= 0) return '';
+    const r = 65, cx = 80, cy = 80;
+    const startRad = (s.startAngle - 90) * Math.PI / 180;
+    const endRad = (s.startAngle + s.angle - 90) * Math.PI / 180;
+    const x1 = cx + r * Math.cos(startRad), y1 = cy + r * Math.sin(startRad);
+    const x2 = cx + r * Math.cos(endRad), y2 = cy + r * Math.sin(endRad);
+    return `<path d="M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${s.angle > 180 ? 1 : 0} 1 ${x2} ${y2} Z" fill="${s.color}" opacity="0.85"/>`;
+  }).join('');
+
+  const legend = data.map(([key, val], i) => `
+    <div class="donut-legend-item"><span class="donut-legend-dot" style="background:${colors[i % colors.length]}"></span>${key || 'Unknown'}<span class="donut-legend-value">${val}</span></div>
+  `).join('');
+
+  document.getElementById(containerId).innerHTML = `
+    <svg class="donut-svg" viewBox="0 0 160 160">
+      ${svgPaths}
+      <circle cx="80" cy="80" r="40" fill="#111827"/>
+      <text x="80" y="76" text-anchor="middle" fill="white" font-size="18" font-weight="800">${total}</text>
+      <text x="80" y="92" text-anchor="middle" fill="#94a3b8" font-size="10" font-weight="500">Total</text>
+    </svg>
+    <div class="donut-legend">${legend}</div>
+  `;
+}
+
+function updateOwnershipDonut() {
+  const counts = {};
+  filteredData.forEach(c => { const k = c.ownership || 'Unknown'; counts[k] = (counts[k] || 0) + 1; });
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const colors = entries.map(([k]) => OWNERSHIP_COLORS[k] || '#64748b');
+  makeDonut('ownershipDonut', entries, colors);
+}
+
+function updateTierDonut() {
+  const counts = {};
+  filteredData.forEach(c => { const k = c.stateTier || 'Unknown'; counts[k] = (counts[k] || 0) + 1; });
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const colors = ['#3b82f6', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#64748b'];
+  makeDonut('tierDonut', entries, colors);
+}
+
+function makeBarChart(containerId, data, colors) {
+  const maxVal = data.length > 0 ? Math.max(...data.map(d => d[1])) : 1;
+  document.getElementById(containerId).innerHTML = data.map(([label, count], i) => `
+    <div class="bar-row">
+      <div class="bar-label" title="${label}">${label}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(count/maxVal)*100}%;background:${colors[i % colors.length]}">${count > maxVal * 0.15 ? count : ''}</div></div>
+      <div class="bar-value">${count}</div>
+    </div>
+  `).join('');
+}
+
+function updateStateChart() {
+  // Use ALL data for the state chart so it doesn't collapse when filtered
+  const counts = {};
+  DATA.companies.forEach(c => {
+    const st = c.fullState || c.state;
+    if (st && st !== '#ERROR!') counts[st] = (counts[st] || 0) + 1;
+  });
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 15);
+  const maxVal = sorted.length > 0 ? Math.max(...sorted.map(d => d[1])) : 1;
+  const colors = ['#3b82f6', '#06b6d4', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#6366f1', '#14b8a6', '#a855f7', '#f43f5e', '#0ea5e9', '#84cc16', '#f97316', '#64748b', '#e879f9'];
+
+  // Bar chart (in charts section below) — still clickable
+  document.getElementById('stateBarChart').innerHTML = sorted.map(([label, count], i) => {
+    const isActive = activeFilters.state.has(label);
+    return `
+      <div class="bar-row clickable ${isActive ? 'active' : ''}" onclick="toggleStateFilter('${label.replace(/'/g, "\\'")}')">
+        <div class="bar-label" title="${label}">${label}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${(count/maxVal)*100}%;background:${colors[i % colors.length]}"></div></div>
+        <div class="bar-value">${count}</div>
+      </div>
+    `;
+  }).join('');
+
+  // Badge in chart header
+  const badge = document.getElementById('stateFilterBadge');
+  if (activeFilters.state.size > 0) {
+    const names = Array.from(activeFilters.state).join(', ');
+    badge.innerHTML = `<span class="state-filter-badge" onclick="clearStateFilter()">
+      ${names} <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </span>`;
+  } else {
+    badge.innerHTML = '';
+  }
+
+  // Update map state boundaries highlighting + overlay badge
+  renderStateBoundaries();
+  updateStateFilterOverlay();
+}
+
+function toggleStateFilter(state) {
+  if (activeFilters.state.has(state)) {
+    activeFilters.state.delete(state);
+  } else {
+    activeFilters.state.add(state);
+  }
+  applyFilters();
+}
+
+function clearStateFilter() {
+  activeFilters.state.clear();
+  applyFilters();
+}
+
+function updateMediumChart() {
+  const counts = {};
+  filteredData.forEach(c => {
+    if (c.byMedium) Object.entries(c.byMedium).forEach(([k, v]) => { counts[k] = (counts[k] || 0) + v; });
+  });
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const colors = ['#06b6d4', '#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#f43f5e'];
+  makeBarChart('mediumBarChart', sorted, colors);
+}
+
+function updateAccountChart() {
+  const counts = {};
+  filteredData.forEach(c => {
+    if (c.byAccount) Object.entries(c.byAccount).forEach(([k, v]) => { counts[k] = (counts[k] || 0) + v; });
+  });
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const colors = ['#8b5cf6', '#3b82f6', '#06b6d4', '#10b981', '#f59e0b'];
+  makeBarChart('accountBarChart', sorted, colors);
+}
+
+function updateActivityChart() {
+  const monthly = DATA.meta.monthlyCounts || {};
+  const entries = Object.entries(monthly).sort((a, b) => a[0].localeCompare(b[0]));
+  if (entries.length === 0) { document.getElementById('activityChart').innerHTML = '<div style="color:var(--text-muted);font-size:13px">No monthly data available</div>'; return; }
+  const maxVal = Math.max(...entries.map(e => e[1]), 1);
+
+  const monthNames = { '01': 'Jan', '02': 'Feb', '03': 'Mar', '04': 'Apr', '05': 'May', '06': 'Jun', '07': 'Jul', '08': 'Aug', '09': 'Sep', '10': 'Oct', '11': 'Nov', '12': 'Dec' };
+
+  document.getElementById('activityChart').innerHTML = `
+    <div class="activity-bars">
+      ${entries.map(([key, val]) => {
+        const [year, month] = key.split('-');
+        const label = `${monthNames[month]} '${year.slice(2)}`;
+        const height = Math.max((val / maxVal) * 140, 4);
+        return `
+          <div class="activity-bar-wrap" title="${label}: ${val} messages">
+            <div class="activity-bar-val">${val}</div>
+            <div class="activity-bar" style="height:${height}px"></div>
+            <div class="activity-bar-label">${label}</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function updateLegend() {
+  const items = Object.entries(OWNERSHIP_COLORS)
+    .filter(([k]) => filteredData.some(c => c.ownership === k))
+    .map(([key, color]) => `<div class="legend-item"><span class="legend-dot" style="border-color:${color};background:${color}40"></span>${key}</div>`).join('');
+  document.getElementById('mapLegend').innerHTML = items;
+}
+
+// ============================================================
+// TABLE
+// ============================================================
+function updateTable() {
+  document.getElementById('tableContainer').innerHTML = `
+    <table class="data-table"><thead><tr>
+      <th>Company</th><th>State</th><th>Ownership</th><th>Msgs</th><th>Responded</th><th>Intro</th><th>Meeting</th><th>Pipeline</th><th>Status</th>
+    </tr></thead><tbody>
+      ${filteredData.map(c => {
+        const sc = c.inPipeline ? '#ec4899' : c.assistedMeeting ? '#10b981' : c.scheduledIntro ? '#8b5cf6' : c.responded ? '#3b82f6' : c.msgsSent > 0 ? '#f59e0b' : '#64748b';
+        const sl = c.notInterested ? 'Not Interested' : c.inPipeline ? 'Pipeline' : c.assistedMeeting ? 'Meeting' : c.scheduledIntro ? 'Intro' : c.responded ? 'Responded' : c.msgsSent > 0 ? 'Contacted' : 'None';
+        return `<tr>
+          <td style="font-weight:600;color:var(--text-primary)">${c.website ? `<a href="${c.website}" target="_blank" style="color:var(--accent-blue);text-decoration:none">${c.name}</a>` : c.name}</td>
+          <td>${c.fullState || c.state}</td>
+          <td><span style="color:${OWNERSHIP_COLORS[c.ownership] || '#94a3b8'}">${c.ownership || '-'}</span></td>
+          <td>${c.msgsSent}</td>
+          <td>${c.responded ? c.respondedCount : '-'}</td>
+          <td>${c.scheduledIntro ? 'Yes' : '-'}</td>
+          <td>${c.assistedMeeting ? 'Yes' : '-'}</td>
+          <td>${c.pipelineStatus || '-'}</td>
+          <td><span class="status-dot" style="background:${sc}"></span>${sl}</td>
+        </tr>`;
+      }).join('')}
+    </tbody></table>
+  `;
+}
+
+// ============================================================
+// VIEW TOGGLE
+// ============================================================
+function setView(view) {
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.view-btn[onclick="setView('${view}')"]`).classList.add('active');
+  const mapWrap = document.getElementById('mapWrapper');
+  const tableEl = document.getElementById('tableContainer');
+  if (view === 'map') { mapWrap.style.display = 'block'; tableEl.style.display = 'none'; setTimeout(() => map.invalidateSize(), 100); }
+  else { mapWrap.style.display = 'none'; tableEl.style.display = 'block'; }
+}
+
+// ============================================================
+// CSV UPLOAD (Grid View format)
+// ============================================================
+function openUploadModal() { document.getElementById('uploadModal').classList.add('show'); }
+function closeUploadModal() { document.getElementById('uploadModal').classList.remove('show'); document.getElementById('uploadStatus').className = 'upload-status'; }
+
+function parseCSVString(text) {
+  const lines = []; let current = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') { if (inQuotes && text[i+1] === '"') { current += '"'; i++; } else inQuotes = !inQuotes; }
+    else if (ch === '\n' && !inQuotes) { lines.push(current); current = ''; }
+    else if (ch === '\r' && !inQuotes) { /* skip */ }
+    else current += ch;
+  }
+  if (current.trim()) lines.push(current);
+  if (lines.length === 0) return [];
+  const headers = parseCSVLine(lines[0]);
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const vals = parseCSVLine(lines[i]);
+    const obj = {};
+    headers.forEach((h, idx) => { obj[h.replace(/^\uFEFF/, '')] = vals[idx] || ''; });
+    rows.push(obj);
+  }
+  return rows;
+}
+
+function parseCSVLine(line) {
+  const result = []; let current = '', inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { if (inQuotes && line[i+1] === '"') { current += '"'; i++; } else inQuotes = !inQuotes; }
+    else if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+    else current += ch;
+  }
+  result.push(current.trim());
+  return result;
+}
+
+const STATE_COORDS_JS = {"AL":[32.81,-86.79],"AK":[61.37,-152.40],"AZ":[33.73,-111.43],"AR":[34.97,-92.37],"CA":[36.12,-119.68],"CO":[39.06,-105.31],"CT":[41.60,-72.76],"DE":[39.32,-75.51],"FL":[27.77,-81.69],"GA":[33.04,-83.64],"HI":[21.09,-157.50],"ID":[44.24,-114.48],"IL":[40.35,-88.99],"IN":[39.85,-86.26],"IA":[42.01,-93.21],"KS":[38.53,-96.73],"KY":[37.67,-84.67],"LA":[31.17,-91.87],"ME":[44.69,-69.38],"MD":[39.06,-76.80],"MA":[42.23,-71.53],"MI":[43.33,-84.54],"MN":[45.69,-93.90],"MS":[32.74,-89.68],"MO":[38.46,-92.29],"MT":[46.92,-110.45],"NE":[41.13,-98.27],"NV":[38.31,-117.06],"NH":[43.45,-71.56],"NJ":[40.30,-74.52],"NM":[34.84,-106.25],"NY":[42.17,-74.95],"NC":[35.63,-79.81],"ND":[47.53,-99.78],"OH":[40.39,-82.76],"OK":[35.57,-96.93],"OR":[44.57,-122.07],"PA":[40.59,-77.21],"RI":[41.68,-71.51],"SC":[33.86,-80.95],"SD":[44.30,-99.44],"TN":[35.75,-86.69],"TX":[31.05,-97.56],"UT":[40.15,-111.86],"VT":[44.05,-72.71],"VA":[37.77,-78.17],"WA":[47.40,-121.49],"WV":[38.49,-80.95],"WI":[44.27,-89.62],"WY":[42.76,-107.30],"DC":[38.90,-77.03]};
+const STATE_ABBREV_JS = {"Alabama":"AL","Alaska":"AK","Arizona":"AZ","Arkansas":"AR","California":"CA","Colorado":"CO","Connecticut":"CT","Delaware":"DE","Florida":"FL","Georgia":"GA","Hawaii":"HI","Idaho":"ID","Illinois":"IL","Indiana":"IN","Iowa":"IA","Kansas":"KS","Kentucky":"KY","Louisiana":"LA","Maine":"ME","Maryland":"MD","Massachusetts":"MA","Michigan":"MI","Minnesota":"MN","Mississippi":"MS","Missouri":"MO","Montana":"MT","Nebraska":"NE","Nevada":"NV","New Hampshire":"NH","New Jersey":"NJ","New Mexico":"NM","New York":"NY","North Carolina":"NC","North Dakota":"ND","Ohio":"OH","Oklahoma":"OK","Oregon":"OR","Pennsylvania":"PA","Rhode Island":"RI","South Carolina":"SC","South Dakota":"SD","Tennessee":"TN","Texas":"TX","Utah":"UT","Vermont":"VT","Virginia":"VA","Washington":"WA","West Virginia":"WV","Wisconsin":"WI","Wyoming":"WY"};
+
+// Full state name -> abbreviation for label display
+const STATE_NAME_TO_ABBR = {};
+Object.entries(STATE_ABBREV_JS).forEach(([full, abbr]) => { STATE_NAME_TO_ABBR[full] = abbr; });
+
+function hashCode(s) { let h = 0; for (let i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; } return Math.abs(h); }
+
+function getCoords(state, name) {
+  let abbr = state;
+  if (state.length > 2) abbr = STATE_ABBREV_JS[state] || state;
+  if (!STATE_COORDS_JS[abbr]) return [null, null];
+  let [lat, lng] = STATE_COORDS_JS[abbr];
+  const h = hashCode(name);
+  lat += ((h % 1000) / 1000 - 0.5) * 0.8;
+  lng += (((h >> 10) % 1000) / 1000 - 0.5) * 0.8;
+  return [lat, lng];
+}
+
+function processUploadedCSV(text) {
+  const rows = parseCSVString(text);
+  if (rows.length === 0) { showUploadStatus('No valid data found in CSV', 'error'); return; }
+
+  // Aggregate by company
+  const compMap = {};
+  const medCounts = {}, acctCounts = {}, monthlyCounts = {};
+
+  rows.forEach(r => {
+    const raw = (r['Companies (from Contacts)'] || '').trim();
+    if (!raw) return;
+    const primary = raw.split(',')[0].trim();
+    const key = primary.toLowerCase();
+
+    if (!compMap[key]) {
+      compMap[key] = {
+        name: primary, address: '', state: '', fullState: '', ownership: '', override: false,
+        website: '', allStates: '', stateTier: '', msgsSent: 0, byMedium: {}, byAccount: {},
+        responded: false, respondedCount: 0, scheduledIntro: false, assistedMeeting: false,
+        notInterested: false, followUpLater: false, contactCount: 0, contacts: [],
+        firstMsg: '', lastMsg: '', meetingDate: '', opened: false, viewedProfile: false,
+        inPipeline: false, pipelineStatus: '', pipelinePriority: '', pipelineType: '', lat: null, lng: null,
+        _contacts: new Set(), _states: new Set(), _fullStates: new Set(),
+      };
+    }
+    const c = compMap[key];
+    c.msgsSent++;
+
+    const med = (r['Message Medium'] || '').trim();
+    if (med) { c.byMedium[med] = (c.byMedium[med] || 0) + 1; medCounts[med] = (medCounts[med] || 0) + 1; }
+
+    const acct = (r['Account'] || '').trim();
+    if (acct) { c.byAccount[acct] = (c.byAccount[acct] || 0) + 1; acctCounts[acct] = (acctCounts[acct] || 0) + 1; }
+
+    const contact = (r['Contacts'] || '').trim();
+    if (contact) c._contacts.add(contact);
+
+    if ((r['Responded'] || '').trim() === 'checked') { c.responded = true; c.respondedCount++; }
+
+    const sched = (r['Scheduled Intro Call'] || '').trim().toUpperCase();
+    if (sched === 'TRUE') c.scheduledIntro = true;
+
+    const assisted = (r['Assisted Meeting'] || '').trim().toUpperCase();
+    if (assisted === 'TRUE') c.assistedMeeting = true;
+
+    const ni = (r['Not Interested'] || '').trim().toUpperCase();
+    if (ni === 'NOT INTERESTED') c.notInterested = true;
+    if (ni === 'FOLLOW UP LATER') c.followUpLater = true;
+
+    const states = (r['State(s) (from Companies) (from Contacts)'] || '').trim();
+    if (states) states.split(',').forEach(s => { s = s.trim(); if (s) c._states.add(s); });
+
+    const fullStates = (r['Full HQ State Name (from Companies) (from Contacts)'] || '').trim();
+    if (fullStates) fullStates.split(',').forEach(s => { s = s.trim(); if (s) c._fullStates.add(s); });
+
+    const own = (r['Ownership (from Companies) (from Contacts)'] || '').trim();
+    if (own) c.ownership = own.split(',')[0].trim();
+
+    const override = (r['Override (from Companies) (from Contacts)'] || '').trim();
+    if (override.toLowerCase().includes('checked')) c.override = true;
+
+    const tier = (r['State Tier (from Companies) (from Contacts)'] || '').trim();
+    if (tier) c.stateTier = tier.split(',')[0].trim();
+
+    const meetDate = (r['Meeting Date'] || '').trim();
+    if (meetDate) c.meetingDate = meetDate;
+
+    const dateSent = (r['Date Sent'] || '').trim();
+    if (dateSent) {
+      if (!c.firstMsg || dateSent < c.firstMsg) c.firstMsg = dateSent;
+      if (!c.lastMsg || dateSent > c.lastMsg) c.lastMsg = dateSent;
+      const mm = dateSent.match(/^(\d{1,2})\/\d{1,2}\/(\d{4})/);
+      if (mm) { const mk = `${mm[2]}-${mm[1].padStart(2, '0')}`; monthlyCounts[mk] = (monthlyCounts[mk] || 0) + 1; }
+    }
+  });
+
+  // Finalize companies
+  const companies = Object.values(compMap).map(c => {
+    c.contacts = Array.from(c._contacts);
+    c.contactCount = c._contacts.size;
+    c.allStates = Array.from(c._fullStates).join(', ') || Array.from(c._states).join(', ');
+    c.fullState = c._fullStates.size > 0 ? Array.from(c._fullStates)[0] : '';
+    const stateForCoords = c._fullStates.size > 0 ? Array.from(c._fullStates)[0] : (c._states.size > 0 ? Array.from(c._states)[0] : '');
+    [c.lat, c.lng] = getCoords(stateForCoords, c.name);
+    c.state = stateForCoords.length > 2 ? (STATE_ABBREV_JS[stateForCoords] || stateForCoords) : stateForCoords;
+    delete c._contacts; delete c._states; delete c._fullStates;
+    return c;
+  });
+
+  DATA.companies = companies;
+  DATA.pipeline = DATA.pipeline || [];
+  DATA.actions = DATA.actions || [];
+  DATA.meta = {
+    totalMessages: rows.length,
+    mediumCounts: medCounts,
+    accountCounts: acctCounts,
+    monthlyCounts: Object.fromEntries(Object.entries(monthlyCounts).sort((a, b) => a[0].localeCompare(b[0]))),
+  };
+
+  // Clear & rebuild filters
+  activeFilters.search = ''; activeFilters.pipeline.clear(); activeFilters.status.clear(); activeFilters.state.clear(); activeFilters.ownership.clear(); activeFilters.medium.clear(); activeFilters.account.clear();
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('searchInput').value = '';
+  ['pipelineFilters', 'outreachFilters', 'ownershipFilters', 'mediumFilters', 'accountFilters'].forEach(id => document.getElementById(id).innerHTML = '');
+  buildFilters();
+  applyFilters();
+
+  showUploadStatus(`Loaded ${companies.length} companies from ${rows.length} messages!`, 'success');
+  setTimeout(closeUploadModal, 2000);
+}
+
+function showUploadStatus(msg, type) { const el = document.getElementById('uploadStatus'); el.textContent = msg; el.className = `upload-status ${type}`; }
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file && file.name.endsWith('.csv')) readFile(file);
+  else showUploadStatus('Please upload a .csv file', 'error');
+});
+fileInput.addEventListener('change', e => { if (e.target.files[0]) readFile(e.target.files[0]); });
+function readFile(file) { const reader = new FileReader(); reader.onload = e => processUploadedCSV(e.target.result); reader.readAsText(file); }
+
+// ============================================================
+init();
+</script>
+</body>
+</html>
