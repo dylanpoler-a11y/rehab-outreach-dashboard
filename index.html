@@ -128,7 +128,11 @@ body::before {
   content: ''; position: absolute; top: 0; left: 0; right: 0;
   height: 2px; background: var(--kpi-color, var(--accent-blue)); opacity: 0.6;
 }
+.kpi-card { cursor: pointer; }
 .kpi-card:hover { border-color: var(--border-bright); transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
+.kpi-card.selected { border-color: var(--kpi-color, var(--accent-blue)); box-shadow: 0 0 20px color-mix(in srgb, var(--kpi-color, var(--accent-blue)) 35%, transparent), 0 4px 20px rgba(0,0,0,0.3); transform: translateY(-3px); }
+.kpi-card.selected::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: var(--kpi-color, var(--accent-blue)); opacity: 0.8; }
+.kpi-card:not(.selected).dimmed { opacity: 0.4; }
 .kpi-label { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
 .kpi-value { font-size: 28px; font-weight: 800; letter-spacing: -1px; }
 .kpi-sub { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
@@ -871,6 +875,7 @@ let map, markersLayer, ghostLayer, statesLayer;
 let activeGhostCompany = null;
 let stateGeoData = null;
 let filterDefs = {}; // { 'type:key': { fn, type, key } } — registry for dynamic count updates
+let activeKPI = null; // currently selected KPI key (or null)
 
 // Multi-select pipeline card state
 let selectedCards = new Set();
@@ -914,6 +919,7 @@ function initMap() {
   map.on('popupclose', () => clearGhostMarkers());
   map.on('click', () => {
     if (selectedCards.size > 0) { clearCardSelection(); updateMapHighlights(); }
+    if (activeKPI) { activeKPI = null; applyKPIHighlight(); document.querySelectorAll('.kpi-card[data-kpi]').forEach(c => c.classList.remove('selected','dimmed')); }
   });
 
   // Load US state boundaries GeoJSON
@@ -1271,6 +1277,7 @@ function updateAll() {
   updateFilterCounts();
   updateKPIs();
   updateMap();
+  applyKPIHighlight();
   updateCharts();
   updateTable();
   updateLegend();
@@ -1290,6 +1297,17 @@ function updateFilterCounts() {
 // ============================================================
 // KPIs
 // ============================================================
+// KPI definitions with filter functions for map highlighting
+const KPI_DEFS = [
+  { key: 'reached',   label: 'Companies Reached',  color: 'var(--accent-blue)',   fn: c => true },
+  { key: 'messages',  label: 'Total Messages',      color: 'var(--accent-cyan)',   fn: c => c.msgsSent > 0 },
+  { key: 'responses', label: 'Responses',           color: 'var(--accent-green)',  fn: c => c.responded },
+  { key: 'intros',    label: 'Intros Scheduled',    color: 'var(--accent-purple)', fn: c => c.scheduledIntro },
+  { key: 'meetings',  label: 'Assisted Meetings',   color: 'var(--accent-orange)', fn: c => c.assistedMeeting },
+  { key: 'pipeline',  label: 'In Pipeline',         color: 'var(--accent-pink)',   fn: c => c.inPipeline },
+  { key: 'not_interested', label: 'Not Interested',  color: 'var(--accent-red)',   fn: c => c.notInterested },
+];
+
 function updateKPIs() {
   const d = filteredData;
   const totalMsgs = d.reduce((s, c) => s + c.msgsSent, 0);
@@ -1300,23 +1318,81 @@ function updateKPIs() {
   const inPipeline = d.filter(c => c.inPipeline).length;
   const respRate = contacted > 0 ? ((responded/contacted)*100).toFixed(1) : '0';
 
-  const kpis = [
-    { label: 'Companies Reached', value: d.length, color: 'var(--accent-blue)', sub: `${contacted} contacted` },
-    { label: 'Total Messages', value: totalMsgs, color: 'var(--accent-cyan)', sub: `Across ${contacted} companies` },
-    { label: 'Responses', value: responded, color: 'var(--accent-green)', sub: `${respRate}% response rate` },
-    { label: 'Intros Scheduled', value: scheduledIntro, color: 'var(--accent-purple)', sub: `${d.length > 0 ? ((scheduledIntro/d.length)*100).toFixed(1) : '0'}% of companies reached` },
-    { label: 'Assisted Meetings', value: assistedMeeting, color: 'var(--accent-orange)', sub: `${scheduledIntro > 0 ? ((assistedMeeting/scheduledIntro)*100).toFixed(0) : 0}% of intros` },
-    { label: 'In Pipeline', value: inPipeline, color: 'var(--accent-pink)', sub: `Active deals` },
-    { label: 'Not Interested', value: d.filter(c => c.notInterested).length, color: 'var(--accent-red)', sub: `${d.filter(c => c.followUpLater).length} follow up later` },
-  ];
+  const kpiValues = {
+    reached: { value: d.length, sub: `${contacted} contacted` },
+    messages: { value: totalMsgs, sub: `Across ${contacted} companies` },
+    responses: { value: responded, sub: `${respRate}% response rate` },
+    intros: { value: scheduledIntro, sub: `${d.length > 0 ? ((scheduledIntro/d.length)*100).toFixed(1) : '0'}% of companies reached` },
+    meetings: { value: assistedMeeting, sub: `${scheduledIntro > 0 ? ((assistedMeeting/scheduledIntro)*100).toFixed(0) : 0}% of intros` },
+    pipeline: { value: inPipeline, sub: `Active deals` },
+    not_interested: { value: d.filter(c => c.notInterested).length, sub: `${d.filter(c => c.followUpLater).length} follow up later` },
+  };
 
-  document.getElementById('kpiRow').innerHTML = kpis.map((k, i) => `
-    <div class="kpi-card animate-in" style="--kpi-color:${k.color};animation-delay:${i*0.04}s">
+  document.getElementById('kpiRow').innerHTML = KPI_DEFS.map((k, i) => {
+    const v = kpiValues[k.key];
+    const sel = activeKPI === k.key ? 'selected' : (activeKPI ? 'dimmed' : '');
+    return `
+    <div class="kpi-card animate-in ${sel}" data-kpi="${k.key}" style="--kpi-color:${k.color};animation-delay:${i*0.04}s" onclick="toggleKPI('${k.key}')">
       <div class="kpi-label">${k.label}</div>
-      <div class="kpi-value" style="color:${k.color}">${k.value.toLocaleString()}</div>
-      <div class="kpi-sub">${k.sub}</div>
+      <div class="kpi-value" style="color:${k.color}">${v.value.toLocaleString()}</div>
+      <div class="kpi-sub">${v.sub}</div>
     </div>
-  `).join('');
+  `;}).join('');
+}
+
+function toggleKPI(key) {
+  // Clear pipeline card selection when using KPI highlight
+  if (selectedCards.size > 0) { clearCardSelection(); if (highlightLayer) highlightLayer.clearLayers(); }
+
+  if (activeKPI === key) {
+    activeKPI = null; // deselect
+  } else {
+    activeKPI = key;
+  }
+
+  // Update KPI card visual states (without full re-render to avoid flicker)
+  document.querySelectorAll('.kpi-card[data-kpi]').forEach(card => {
+    card.classList.remove('selected', 'dimmed');
+    if (activeKPI === card.dataset.kpi) card.classList.add('selected');
+    else if (activeKPI) card.classList.add('dimmed');
+  });
+
+  applyKPIHighlight();
+}
+
+function applyKPIHighlight() {
+  if (!markersLayer) return;
+
+  if (!activeKPI) {
+    // No KPI selected — restore all markers to full opacity
+    markersLayer.eachLayer(m => {
+      const el = m.getElement();
+      if (el) el.style.opacity = '1';
+    });
+    return;
+  }
+
+  // Find the KPI filter function
+  const kpiDef = KPI_DEFS.find(k => k.key === activeKPI);
+  if (!kpiDef) return;
+
+  // Build a Set of company names/IDs that pass the KPI filter (within filteredData)
+  const matchingNames = new Set();
+  const matchingIds = new Set();
+  filteredData.forEach(c => {
+    if (kpiDef.fn(c)) {
+      matchingNames.add(c.name);
+      if (c.airtableId) matchingIds.add(c.airtableId);
+    }
+  });
+
+  // Dim non-matching markers, brighten matching ones
+  markersLayer.eachLayer(m => {
+    const el = m.getElement();
+    if (!el) return;
+    const isMatch = (m._airtableId && matchingIds.has(m._airtableId)) || matchingNames.has(m._companyName);
+    el.style.opacity = isMatch ? '1' : '0.1';
+  });
 }
 
 // ============================================================
@@ -1600,7 +1676,13 @@ function findCompanyForDeal(dealName) {
 function updateMapHighlights() {
   if (highlightLayer) highlightLayer.clearLayers();
 
-  // If nothing selected, restore all markers to full opacity
+  // Clear KPI highlight when pipeline cards are being used
+  if (selectedCards.size > 0 && activeKPI) {
+    activeKPI = null;
+    document.querySelectorAll('.kpi-card[data-kpi]').forEach(c => c.classList.remove('selected','dimmed'));
+  }
+
+  // If nothing selected, restore all markers to full opacity (respecting KPI highlight)
   if (selectedCards.size === 0) {
     markersLayer.eachLayer(m => {
       const el = m.getElement();
