@@ -870,6 +870,7 @@ let filteredData = [];
 let map, markersLayer, ghostLayer, statesLayer;
 let activeGhostCompany = null;
 let stateGeoData = null;
+let filterDefs = {}; // { 'type:key': { fn, type, key } } — registry for dynamic count updates
 
 // Multi-select pipeline card state
 let selectedCards = new Set();
@@ -1125,9 +1126,20 @@ function buildFilters() {
     { key: 'due_diligence', label: 'Due Diligence', color: '#8b5cf6', count: pipe.filter(p => p.status.includes('Due Diligence') || p.status.includes('Placing Bid')).length },
   ];
   const pipeEl = document.getElementById('pipelineFilters');
+  const pipelineFns = {
+    'active': c => c.inPipeline && c.pipelineStatus && c.pipelineStatus.startsWith('Active'),
+    'new_lead': c => c.inPipeline && c.pipelineStatus === 'New Lead',
+    'stand_by': c => c.inPipeline && c.pipelineStatus === 'Stand By',
+    'stalled': c => c.inPipeline && c.pipelineStatus === 'Stalled',
+    'due_diligence': c => c.inPipeline && c.pipelineStatus && (c.pipelineStatus.includes('Due Diligence') || c.pipelineStatus.includes('Placing Bid')),
+  };
   pipelineStages.forEach(item => {
+    const fn = pipelineFns[item.key] || (() => false);
+    filterDefs['pipeline:' + item.key] = { fn, type: 'pipeline', key: item.key };
     const btn = document.createElement('button');
     btn.className = 'filter-btn';
+    btn.dataset.filterType = 'pipeline';
+    btn.dataset.filterKey = item.key;
     btn.innerHTML = `<span class="filter-dot" style="background:${item.color}"></span>${item.label}<span class="filter-count">${item.count}</span>`;
     btn.addEventListener('click', () => {
       if (activeFilters.pipeline.has(item.key)) {
@@ -1182,8 +1194,11 @@ function renderFilterGroup(containerId, items, filterType, companies) {
   const el = document.getElementById(containerId);
   items.forEach(item => {
     const count = companies.filter(item.fn).length;
+    filterDefs[filterType + ':' + item.key] = { fn: item.fn, type: filterType, key: item.key };
     const btn = document.createElement('button');
     btn.className = 'filter-btn';
+    btn.dataset.filterType = filterType;
+    btn.dataset.filterKey = item.key;
     btn.innerHTML = `<span class="filter-dot" style="background:${item.color}"></span>${item.label}<span class="filter-count">${count}</span>`;
     btn.addEventListener('click', () => {
       if (activeFilters[filterType].has(item.key)) {
@@ -1253,11 +1268,23 @@ function applyFilters() {
 function updateAll() {
   document.getElementById('companyCount').textContent = filteredData.length;
   document.getElementById('messageCount').textContent = filteredData.reduce((s, c) => s + c.msgsSent, 0).toLocaleString();
+  updateFilterCounts();
   updateKPIs();
   updateMap();
   updateCharts();
   updateTable();
   updateLegend();
+}
+
+function updateFilterCounts() {
+  document.querySelectorAll('.filter-btn[data-filter-type][data-filter-key]').forEach(btn => {
+    const def = filterDefs[btn.dataset.filterType + ':' + btn.dataset.filterKey];
+    if (!def) return;
+    const countEl = btn.querySelector('.filter-count');
+    if (!countEl) return;
+    const newCount = filteredData.filter(def.fn).length;
+    countEl.textContent = newCount;
+  });
 }
 
 // ============================================================
