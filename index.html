@@ -1355,12 +1355,17 @@ function updateKPIs() {
     const v = kpiValues[k.key];
     const sel = activeKPI === k.key ? 'selected' : (activeKPI ? 'dimmed' : '');
     return `
-    <div class="kpi-card animate-in ${sel}" data-kpi="${k.key}" style="--kpi-color:${k.color};animation-delay:${i*0.04}s" onclick="toggleKPI('${k.key}')">
+    <div class="kpi-card animate-in ${sel}" data-kpi="${k.key}" style="--kpi-color:${k.color};animation-delay:${i*0.04}s">
       <div class="kpi-label">${k.label}</div>
       <div class="kpi-value" style="color:${k.color}">${v.value.toLocaleString()}</div>
       <div class="kpi-sub">${v.sub}</div>
     </div>
   `;}).join('');
+
+  // Attach click handlers (more reliable than inline onclick)
+  document.querySelectorAll('.kpi-card[data-kpi]').forEach(card => {
+    card.addEventListener('click', () => toggleKPI(card.dataset.kpi));
+  });
 }
 
 function toggleKPI(key) {
@@ -2069,7 +2074,7 @@ function setView(view) {
   const mapWrap = document.getElementById('mapWrapper');
   const tableEl = document.getElementById('tableContainer');
   if (view === 'map') { mapWrap.style.display = 'block'; tableEl.style.display = 'none'; setTimeout(() => map.invalidateSize(), 100); }
-  else { mapWrap.style.display = 'none'; tableEl.style.display = 'block'; }
+  else { mapWrap.style.display = 'none'; tableEl.style.display = 'block'; updateTable(); }
 }
 
 // ============================================================
