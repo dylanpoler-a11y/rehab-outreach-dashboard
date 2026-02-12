@@ -364,8 +364,19 @@ body::before {
 .pipeline-card {
   background: rgba(255,255,255,0.03); border: 1px solid var(--border);
   border-radius: 10px; padding: 12px; margin-bottom: 10px;
-  transition: all 0.2s; cursor: default;
+  transition: all 0.2s; cursor: grab;
 }
+.pipeline-card:active { cursor: grabbing; }
+.pipeline-card.sortable-ghost {
+  opacity: 0.3; background: rgba(59,130,246,0.08);
+  border: 1px dashed var(--accent-blue); border-radius: 10px;
+}
+.pipeline-card.sortable-drag {
+  opacity: 1; box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  transform: rotate(1.5deg); z-index: 9999; cursor: grabbing;
+}
+.pipeline-card.sortable-chosen { cursor: grabbing; }
+.pipeline-col-cards { min-height: 40px; }
 .pipeline-card:hover { border-color: var(--border-bright); transform: translateY(-1px); }
 .pipeline-card-name { font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
 .pipeline-card-detail { font-size: 11px; color: var(--text-muted); margin-bottom: 3px; }
@@ -433,6 +444,18 @@ body::before {
 .action-status-badge.scheduled { background: rgba(16,185,129,0.15); color: #10b981; }
 .action-status-badge.planning { background: rgba(139,92,246,0.15); color: #8b5cf6; }
 .action-status-badge.stalled { background: rgba(100,116,139,0.15); color: #94a3b8; }
+
+/* Toast notifications */
+.toast {
+  position: fixed; bottom: 24px; right: 24px; padding: 12px 20px;
+  border-radius: 10px; font-size: 13px; font-weight: 500; z-index: 10000;
+  opacity: 0; transform: translateY(10px); transition: all 0.3s ease;
+  font-family: 'Inter', sans-serif; pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.success { background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); color: #10b981; }
+.toast.error { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #ef4444; }
+.toast.pending { background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3); color: #3b82f6; }
 
 /* Monthly activity chart */
 .activity-chart { position: relative; height: 180px; }
@@ -722,6 +745,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 <script>
 // ============================================================
 // DATA & STATE
@@ -1163,38 +1187,43 @@ function renderPipeline() {
   document.getElementById('pipelineBoard').innerHTML = PIPELINE_COLUMNS.map(col => {
     const deals = pipe.filter(p => col.match(p.status));
     return `
-      <div class="pipeline-col">
+      <div class="pipeline-col" data-status="${col.key}">
         <div class="pipeline-col-header">
           <div class="pipeline-col-title" style="color:${col.color}">${col.key}</div>
           <div class="pipeline-col-count" style="background:${col.bg};color:${col.color}">${deals.length}</div>
         </div>
-        ${deals.map(d => {
-          const pc = PRIORITY_COLORS[d.priority] || PRIORITY_COLORS['3 - Low'];
-          const ndaCls = (d.ndaStatus||'').toLowerCase().includes('signed') ? 'nda-signed' : (d.ndaStatus||'').toLowerCase().includes('sent') ? 'nda-sent' : (d.ndaStatus||'').toLowerCase().includes('loi') ? 'nda-loi' : '';
-          const hasDR = d.dataRoom && d.dataRoom !== 'No' && d.dataRoom !== 'N/A';
-          const hasSV = d.siteVisit && d.siteVisit !== 'Visit TBD' && d.siteVisit !== 'N/A';
-          return `
-            <div class="pipeline-card">
-              <div class="pipeline-card-name">${d.name}</div>
-              <div class="pipeline-card-detail"><strong>${d.states || '—'}</strong> · ${d.type || 'TBD'}</div>
-              ${d.keyContact ? `<div class="pipeline-card-detail">👤 ${d.keyContact}</div>` : ''}
-              ${d.ebitda && d.ebitda !== 'TBD' ? `<div class="pipeline-card-detail" style="color:var(--accent-green)">💰 ${d.ebitda}</div>` : ''}
-              ${d.nextAction ? `<div class="pipeline-card-detail" style="color:var(--text-secondary);margin-top:4px">→ ${d.nextAction.substring(0, 100)}${d.nextAction.length > 100 ? '...' : ''}</div>` : ''}
-              <div class="pipeline-card-badges">
-                <span class="pipeline-card-priority" style="background:${pc.bg};color:${pc.color}">${d.priority || '—'}</span>
-                ${d.status !== col.key ? `<span class="pipeline-card-priority" style="background:${col.bg};color:${col.color}">${d.status}</span>` : ''}
-                ${ndaCls ? `<span class="pipeline-card-badge ${ndaCls}">NDA: ${d.ndaStatus}</span>` : ''}
-                ${hasDR ? `<span class="pipeline-card-badge data-room">📁 ${d.dataRoom}</span>` : ''}
-                ${hasSV ? `<span class="pipeline-card-badge site-visited">📍 ${d.siteVisit}</span>` : ''}
+        <div class="pipeline-col-cards" data-status="${col.key}">
+          ${deals.map(d => {
+            const pc = PRIORITY_COLORS[d.priority] || PRIORITY_COLORS['3 - Low'];
+            const ndaCls = (d.ndaStatus||'').toLowerCase().includes('signed') ? 'nda-signed' : (d.ndaStatus||'').toLowerCase().includes('sent') ? 'nda-sent' : (d.ndaStatus||'').toLowerCase().includes('loi') ? 'nda-loi' : '';
+            const hasDR = d.dataRoom && d.dataRoom !== 'No' && d.dataRoom !== 'N/A';
+            const hasSV = d.siteVisit && d.siteVisit !== 'Visit TBD' && d.siteVisit !== 'N/A';
+            return `
+              <div class="pipeline-card" data-deal-name="${d.name}" data-original-status="${d.status}">
+                <div class="pipeline-card-name">${d.name}</div>
+                <div class="pipeline-card-detail"><strong>${d.states || '—'}</strong> · ${d.type || 'TBD'}</div>
+                ${d.keyContact ? `<div class="pipeline-card-detail">👤 ${d.keyContact}</div>` : ''}
+                ${d.ebitda && d.ebitda !== 'TBD' ? `<div class="pipeline-card-detail" style="color:var(--accent-green)">💰 ${d.ebitda}</div>` : ''}
+                ${d.nextAction ? `<div class="pipeline-card-detail" style="color:var(--text-secondary);margin-top:4px">→ ${d.nextAction.substring(0, 100)}${d.nextAction.length > 100 ? '...' : ''}</div>` : ''}
+                <div class="pipeline-card-badges">
+                  <span class="pipeline-card-priority" style="background:${pc.bg};color:${pc.color}">${d.priority || '—'}</span>
+                  ${d.status !== col.key ? `<span class="pipeline-card-priority" style="background:${col.bg};color:${col.color}">${d.status}</span>` : ''}
+                  ${ndaCls ? `<span class="pipeline-card-badge ${ndaCls}">NDA: ${d.ndaStatus}</span>` : ''}
+                  ${hasDR ? `<span class="pipeline-card-badge data-room">📁 ${d.dataRoom}</span>` : ''}
+                  ${hasSV ? `<span class="pipeline-card-badge site-visited">📍 ${d.siteVisit}</span>` : ''}
+                </div>
+                ${d.actionOwner || d.deadline ? `<div class="pipeline-card-meta"><span>${d.actionOwner ? '🎯 ' + d.actionOwner : ''}</span><span>${d.deadline && d.deadline !== 'TBD' ? '📅 ' + d.deadline : ''}</span></div>` : ''}
+                ${d.notes ? `<div class="pipeline-card-notes">${d.notes}</div>` : ''}
               </div>
-              ${d.actionOwner || d.deadline ? `<div class="pipeline-card-meta"><span>${d.actionOwner ? '🎯 ' + d.actionOwner : ''}</span><span>${d.deadline && d.deadline !== 'TBD' ? '📅 ' + d.deadline : ''}</span></div>` : ''}
-              ${d.notes ? `<div class="pipeline-card-notes">${d.notes}</div>` : ''}
-            </div>
-          `;
-        }).join('')}
+            `;
+          }).join('')}
+        </div>
       </div>
     `;
   }).join('');
+
+  // Initialize drag-and-drop after rendering
+  initSortable();
 
   // Render action items
   const actionsEl = document.getElementById('actionItemsSection');
@@ -1224,6 +1253,123 @@ function renderPipeline() {
   } else {
     actionsEl.style.display = 'none';
   }
+}
+
+// ============================================================
+// DRAG-AND-DROP + GOOGLE SHEETS WRITEBACK
+// ============================================================
+// ⚠️ PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE:
+const APPS_SCRIPT_URL = '';
+
+function initSortable() {
+  document.querySelectorAll('.pipeline-col-cards').forEach(container => {
+    new Sortable(container, {
+      group: 'pipeline',
+      animation: 200,
+      ghostClass: 'sortable-ghost',
+      chosenClass: 'sortable-chosen',
+      dragClass: 'sortable-drag',
+      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+      onEnd: function (evt) {
+        const card = evt.item;
+        const dealName = card.getAttribute('data-deal-name');
+        const originalStatus = card.getAttribute('data-original-status');
+        const targetCol = evt.to.getAttribute('data-status');
+        const sourceCol = evt.from.getAttribute('data-status');
+
+        // If dropped in the same column, nothing to do
+        if (targetCol === sourceCol) return;
+
+        // Resolve the new status string
+        const newStatus = resolveNewStatus(targetCol, originalStatus);
+
+        // Update the card's data attribute
+        card.setAttribute('data-original-status', newStatus);
+
+        // Update DATA.pipeline in memory (optimistic)
+        const deal = DATA.pipeline.find(d => d.name === dealName);
+        if (deal) deal.status = newStatus;
+
+        // Update column counts and stats bar
+        updateColumnCounts();
+
+        // Write to Google Sheets asynchronously
+        writeStatusToSheet(dealName, newStatus);
+      }
+    });
+  });
+}
+
+function resolveNewStatus(targetColKey, originalStatus) {
+  // Map column key to default status value
+  // If the original status had a sub-status (e.g., "Active - Waiting on Data"),
+  // we simplify to the column's base status when moving between columns
+  const statusMap = {
+    'Active': 'Active',
+    'New Lead': 'New Lead',
+    'Stand By': 'Stand By',
+    'Stalled': 'Stalled',
+    'Due Diligence': 'Due Diligence'
+  };
+  return statusMap[targetColKey] || targetColKey;
+}
+
+function updateColumnCounts() {
+  const pipe = DATA.pipeline;
+  // Update each column's count badge
+  document.querySelectorAll('.pipeline-col').forEach(col => {
+    const colStatus = col.getAttribute('data-status');
+    const cardsInCol = col.querySelectorAll('.pipeline-col-cards .pipeline-card').length;
+    const countEl = col.querySelector('.pipeline-col-count');
+    if (countEl) countEl.textContent = cardsInCol;
+  });
+
+  // Update the stats bar
+  const active = pipe.filter(p => p.status.startsWith('Active')).length;
+  const standby = pipe.filter(p => p.status === 'Stand By').length;
+  const stalled = pipe.filter(p => p.status === 'Stalled').length;
+  const newLeads = pipe.filter(p => p.status === 'New Lead').length;
+
+  document.getElementById('pipelineStats').innerHTML = `
+    <div class="pipeline-stat"><strong>${pipe.length}</strong> Total Deals</div>
+    <div class="pipeline-stat"><strong>${active}</strong> Active</div>
+    <div class="pipeline-stat"><strong>${standby}</strong> Stand By</div>
+    <div class="pipeline-stat"><strong>${newLeads}</strong> New Leads</div>
+    <div class="pipeline-stat"><strong>${stalled}</strong> Stalled</div>
+  `;
+}
+
+async function writeStatusToSheet(dealName, newStatus) {
+  if (!APPS_SCRIPT_URL) {
+    showToast('⚙️ Apps Script URL not configured — drag saved locally only', 'pending');
+    return;
+  }
+
+  showToast(`Updating "${dealName}" → ${newStatus}...`, 'pending');
+
+  try {
+    const resp = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ dealName, newStatus })
+    });
+    const result = await resp.json();
+    if (result.success) {
+      showToast(`✅ "${dealName}" moved to ${newStatus}`, 'success');
+    } else {
+      showToast(`❌ Failed: ${result.error || 'Unknown error'}`, 'error');
+    }
+  } catch (err) {
+    showToast(`❌ Network error: ${err.message}`, 'error');
+  }
+}
+
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.className = 'toast show ' + type;
+  clearTimeout(toast._timeout);
+  toast._timeout = setTimeout(() => { toast.className = 'toast'; }, 4000);
 }
 
 // ============================================================
@@ -1662,5 +1808,6 @@ function readFile(file) { const reader = new FileReader(); reader.onload = e => 
 // ============================================================
 init();
 </script>
+<div id="toast" class="toast"></div>
 </body>
 </html>
