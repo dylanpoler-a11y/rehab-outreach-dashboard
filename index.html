@@ -156,6 +156,14 @@ body::before {
   display: flex; align-items: center; gap: 8px;
 }
 .filter-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.color-mode-btn {
+  background: none; border: 1px solid var(--border); color: var(--text-muted);
+  font-size: 9px; padding: 2px 7px; border-radius: 6px; cursor: pointer;
+  font-family: inherit; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;
+  transition: all 0.2s; white-space: nowrap; flex-shrink: 0;
+}
+.color-mode-btn:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+.color-mode-btn.active { background: rgba(6,182,212,0.12); border-color: rgba(6,182,212,0.4); color: var(--accent-cyan); }
 
 .filter-btn {
   display: flex; align-items: center; gap: 10px; width: 100%;
@@ -730,9 +738,9 @@ document.addEventListener('DOMContentLoaded', () => {
         <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
         <input type="text" class="search-input" id="searchInput" placeholder="Search companies...">
       </div>
-      <div class="filter-section"><div class="filter-title">Pipeline Stage</div><div id="pipelineFilters"></div></div>
-      <div class="filter-section"><div class="filter-title">Outreach Status</div><div id="outreachFilters"></div></div>
-      <div class="filter-section"><div class="filter-title">Ownership</div><div id="ownershipFilters"></div></div>
+      <div class="filter-section"><div class="filter-title">Pipeline Stage <button class="color-mode-btn" data-color-mode="pipeline" onclick="setMapColorMode('pipeline')">🎨 Map</button></div><div id="pipelineFilters"></div></div>
+      <div class="filter-section"><div class="filter-title">Outreach Status <button class="color-mode-btn" data-color-mode="status" onclick="setMapColorMode('status')">🎨 Map</button></div><div id="outreachFilters"></div></div>
+      <div class="filter-section"><div class="filter-title">Ownership <button class="color-mode-btn active" data-color-mode="ownership" onclick="setMapColorMode('ownership')">🎨 Map</button></div><div id="ownershipFilters"></div></div>
       <div class="filter-section"><div class="filter-title">Outreach Channel</div><div id="mediumFilters"></div></div>
       <div class="filter-section"><div class="filter-title">Sent By</div><div id="accountFilters"></div></div>
     </aside>
@@ -876,6 +884,7 @@ let activeGhostCompany = null;
 let stateGeoData = null;
 let filterDefs = {}; // { 'type:key': { fn, type, key } } — registry for dynamic count updates
 let activeKPI = null; // currently selected KPI key (or null)
+let mapColorMode = 'ownership'; // 'ownership' | 'status' | 'pipeline'
 
 // Multi-select pipeline card state
 let selectedCards = new Set();
@@ -886,6 +895,29 @@ let isDragging = 0; // timestamp of last drag end
 const activeFilters = { search: '', pipeline: new Set(), status: new Set(), state: new Set(), ownership: new Set(), medium: new Set(), account: new Set() };
 
 const OWNERSHIP_COLORS = { "Mom 'n Pop": '#10b981', 'Private Equity': '#8b5cf6', 'Publicly Traded': '#3b82f6', 'Non-Profit': '#f59e0b', 'CLOSED': '#ef4444', 'GOV': '#64748b' };
+function getStatusColor(c) {
+  if (c.inPipeline) return '#ec4899';
+  if (c.notInterested) return '#ef4444';
+  if (c.assistedMeeting) return '#10b981';
+  if (c.scheduledIntro) return '#8b5cf6';
+  if (c.responded) return '#3b82f6';
+  if (c.msgsSent > 0) return '#f59e0b';
+  return '#64748b';
+}
+function getPipelineColor(c) {
+  if (!c.inPipeline || !c.pipelineStatus) return '#64748b';
+  if (c.pipelineStatus.startsWith('Active')) return '#10b981';
+  if (c.pipelineStatus === 'New Lead') return '#06b6d4';
+  if (c.pipelineStatus === 'Stand By') return '#f59e0b';
+  if (c.pipelineStatus === 'Stalled') return '#ef4444';
+  if (c.pipelineStatus.includes('Due Diligence') || c.pipelineStatus.includes('Placing Bid')) return '#8b5cf6';
+  return '#64748b';
+}
+function getMarkerColor(c) {
+  if (mapColorMode === 'status') return getStatusColor(c);
+  if (mapColorMode === 'pipeline') return getPipelineColor(c);
+  return OWNERSHIP_COLORS[c.ownership] || '#64748b';
+}
 const PIPELINE_COLUMNS = [
   { key: 'Active', match: s => s.startsWith('Active'), color: 'var(--accent-green)', bg: 'rgba(16,185,129,0.1)' },
   { key: 'New Lead', match: s => s === 'New Lead', color: 'var(--accent-cyan)', bg: 'rgba(6,182,212,0.1)' },
@@ -1016,7 +1048,7 @@ function updateMap() {
 
   filteredData.forEach(c => {
     if (!c.lat || !c.lng) return;
-    const color = OWNERSHIP_COLORS[c.ownership] || '#64748b';
+    const color = getMarkerColor(c);
     const size = c.inPipeline ? 16 : c.assistedMeeting ? 14 : c.scheduledIntro ? 12 : c.responded ? 10 : 7;
     const glow = c.inPipeline ? 16 : c.assistedMeeting ? 12 : 6;
 
@@ -2024,10 +2056,44 @@ function updateActivityChart() {
   `;
 }
 
+function setMapColorMode(mode) {
+  mapColorMode = mode;
+  // Update toggle button states
+  document.querySelectorAll('.color-mode-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.colorMode === mode);
+  });
+  updateMap();
+  updateLegend();
+}
+
 function updateLegend() {
-  const items = Object.entries(OWNERSHIP_COLORS)
-    .filter(([k]) => filteredData.some(c => c.ownership === k))
-    .map(([key, color]) => `<div class="legend-item"><span class="legend-dot" style="border-color:${color};background:${color}40"></span>${key}</div>`).join('');
+  let items = '';
+  if (mapColorMode === 'ownership') {
+    items = Object.entries(OWNERSHIP_COLORS)
+      .filter(([k]) => filteredData.some(c => c.ownership === k))
+      .map(([key, color]) => `<div class="legend-item"><span class="legend-dot" style="border-color:${color};background:${color}40"></span>${key}</div>`).join('');
+  } else if (mapColorMode === 'status') {
+    const statusLegend = [
+      { label: 'In Pipeline', color: '#ec4899' },
+      { label: 'Not Interested', color: '#ef4444' },
+      { label: 'Assisted Meeting', color: '#10b981' },
+      { label: 'Intro Scheduled', color: '#8b5cf6' },
+      { label: 'Responded', color: '#3b82f6' },
+      { label: 'Contacted', color: '#f59e0b' },
+      { label: 'Not Contacted', color: '#64748b' },
+    ];
+    items = statusLegend.map(s => `<div class="legend-item"><span class="legend-dot" style="border-color:${s.color};background:${s.color}40"></span>${s.label}</div>`).join('');
+  } else if (mapColorMode === 'pipeline') {
+    const pipeLegend = [
+      { label: 'Active', color: '#10b981' },
+      { label: 'New Lead', color: '#06b6d4' },
+      { label: 'Stand By', color: '#f59e0b' },
+      { label: 'Stalled', color: '#ef4444' },
+      { label: 'Due Diligence', color: '#8b5cf6' },
+      { label: 'Not in Pipeline', color: '#64748b' },
+    ];
+    items = pipeLegend.map(s => `<div class="legend-item"><span class="legend-dot" style="border-color:${s.color};background:${s.color}40"></span>${s.label}</div>`).join('');
+  }
   document.getElementById('mapLegend').innerHTML = items;
 }
 
