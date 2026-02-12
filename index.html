@@ -998,11 +998,13 @@ function updateMap() {
 
     const icon = L.divIcon({
       className: 'custom-marker',
-      html: `<div style="width:${size}px;height:${size}px;background:${color};border-radius:50%;border:2px solid rgba(255,255,255,${c.inPipeline ? 0.8 : 0.4});box-shadow:0 0 ${glow}px ${color}80;"></div>`,
+      html: `<div style="width:${size}px;height:${size}px;background:${color};border-radius:50%;border:2px solid rgba(255,255,255,${c.inPipeline ? 0.8 : 0.4});box-shadow:0 0 ${glow}px ${color}80;transition:opacity 0.3s;"></div>`,
       iconSize: [size, size], iconAnchor: [size/2, size/2]
     });
 
     const marker = L.marker([c.lat, c.lng], { icon }).addTo(markersLayer);
+    marker._companyName = c.name;
+    marker._companyColor = color;
 
     let statusBadge = '';
     if (c.inPipeline) statusBadge = `<span class="popup-badge" style="background:rgba(236,72,153,0.15);color:#ec4899">In Pipeline</span>`;
@@ -1492,19 +1494,80 @@ function clearCardSelection() {
   selectedCards.clear();
   selectedColumn = null;
   document.querySelectorAll('.pipeline-card.selected').forEach(c => c.classList.remove('selected'));
+  // Restore all marker opacity
+  if (markersLayer) markersLayer.eachLayer(m => {
+    const el = m.getElement();
+    if (el) el.style.opacity = '1';
+  });
+}
+
+function findCompanyForDeal(dealName) {
+  const dn = dealName.toLowerCase().trim();
+  const pipelineCompanies = DATA.companies.filter(c => c.inPipeline && c.lat && c.lng);
+  const allCompanies = DATA.companies.filter(c => c.lat && c.lng);
+
+  // Helper: try matching against a list
+  function tryMatch(name, list) {
+    const n = name.toLowerCase().trim();
+    // Exact
+    let m = list.find(c => c.name && c.name.toLowerCase() === n);
+    if (m) return m;
+    // Starts with
+    m = list.find(c => c.name && (c.name.toLowerCase().startsWith(n) || n.startsWith(c.name.toLowerCase())));
+    if (m) return m;
+    // Contains
+    m = list.find(c => c.name && (c.name.toLowerCase().includes(n) || n.includes(c.name.toLowerCase())));
+    if (m) return m;
+    // First two words
+    const words = n.split(/\s+/).slice(0, 2).join(' ');
+    if (words.length > 3) {
+      m = list.find(c => c.name && c.name.toLowerCase().startsWith(words));
+      if (m) return m;
+    }
+    return null;
+  }
+
+  // 1. Try full name against pipeline companies first (higher priority)
+  let match = tryMatch(dn, pipelineCompanies);
+  if (match) return match;
+
+  // 2. If deal name has "/" split, try first part (e.g., "DreamLife / Crestview" → "DreamLife")
+  if (dn.includes('/')) {
+    const firstPart = dn.split('/')[0].trim();
+    match = tryMatch(firstPart, pipelineCompanies);
+    if (match) return match;
+    match = tryMatch(firstPart, allCompanies);
+    if (match) return match;
+  }
+
+  // 3. Try full name against all companies
+  match = tryMatch(dn, allCompanies);
+  if (match) return match;
+
+  return null;
 }
 
 function updateMapHighlights() {
   if (highlightLayer) highlightLayer.clearLayers();
 
-  if (selectedCards.size === 0) return;
+  // If nothing selected, restore all markers to full opacity
+  if (selectedCards.size === 0) {
+    markersLayer.eachLayer(m => {
+      const el = m.getElement();
+      if (el) el.style.opacity = '1';
+    });
+    return;
+  }
 
+  // Find matching company names for all selected deals
+  const matchedCompanyNames = new Set();
   const bounds = [];
 
   selectedCards.forEach(dealName => {
-    const company = DATA.companies.find(c => c.name && c.name.toLowerCase() === dealName.toLowerCase());
+    const company = findCompanyForDeal(dealName);
     if (!company || !company.lat || !company.lng) return;
 
+    matchedCompanyNames.add(company.name);
     const color = OWNERSHIP_COLORS[company.ownership] || '#06b6d4';
 
     const highlightIcon = L.divIcon({
@@ -1524,6 +1587,17 @@ function updateMapHighlights() {
     });
 
     bounds.push([company.lat, company.lng]);
+  });
+
+  // Dim all non-matched markers, brighten matched ones
+  markersLayer.eachLayer(m => {
+    const el = m.getElement();
+    if (!el) return;
+    if (matchedCompanyNames.has(m._companyName)) {
+      el.style.opacity = '1';
+    } else {
+      el.style.opacity = '0.12';
+    }
   });
 
   if (bounds.length > 0) {
