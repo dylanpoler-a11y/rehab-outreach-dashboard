@@ -435,42 +435,179 @@ def main():
         })
 
     # ============================================================
-    # PROCESS NEGOTIATIONS → pipeline
+    # FETCH GOOGLE SHEET PIPELINE (primary pipeline source)
     # ============================================================
-    # Map negotiation statuses to dashboard statuses
-    NEG_STATUS_MAP = {
-        'Still Interested': 'Active',
-        'Not Interested': 'Stalled',
-        'Revisit Later': 'Stand By',
-        'Closed': 'Due Diligence',
-        '': 'New Lead',
+    GSHEET_ID = '19w2nLn7VrNEWQSRaEIgPQuZwPi88ABNKWnl8Bh7pqVk'
+    PIPELINE_GID = '1109153656'
+    ACTIONS_GID = '2003109190'
+
+    print("  Fetching Google Sheet pipeline...")
+    pipeline = []
+    actions = []
+    gsheet_pipeline_by_name = {}  # normalized name -> deal
+
+    try:
+        # Fetch pipeline detail tab
+        pipe_url = f'https://docs.google.com/spreadsheets/d/{GSHEET_ID}/export?format=csv&gid={PIPELINE_GID}'
+        req = urllib.request.Request(pipe_url)
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            pipe_csv = resp.read().decode('utf-8')
+
+        # Skip to the header row (look for "Facility Name")
+        pipe_lines = pipe_csv.strip().split('\n')
+        header_idx = None
+        for i, line in enumerate(pipe_lines):
+            if 'Facility Name' in line:
+                header_idx = i
+                break
+        if header_idx is None:
+            print("    Could not find pipeline header row!")
+            raise Exception("Missing header")
+        pipe_body = '\n'.join(pipe_lines[header_idx:])
+        reader = csv.DictReader(io.StringIO(pipe_body))
+        for row in reader:
+            name = (row.get('Facility Name') or '').strip()
+            if not name:
+                continue
+            status = (row.get('Status') or '').strip()
+            priority = (row.get('Priority') or '').strip()
+            deal_type = (row.get('Type') or '').strip()
+            states = (row.get('State(s)') or '').strip()
+            ebitda = (row.get('EBITDA / Financials') or '').strip()
+            asking_price = (row.get('Asking Price') or '').strip()
+            nda_status = (row.get('NDA Status') or '').strip()
+            data_room = (row.get('Data Room') or '').strip()
+            site_visit = (row.get('Site Visit') or '').strip()
+            key_contact = (row.get('Key Contact') or '').strip()
+            next_action = (row.get('Next Action') or '').strip()
+            action_owner = (row.get('Action Owner') or '').strip()
+            deadline = (row.get('Deadline') or '').strip()
+            last_update = (row.get('Last Update') or '').strip()
+            days_since = (row.get('Days Since Update') or '').strip()
+            notes = (row.get('Notes') or '').strip()
+            deal_num = (row.get('#') or '').strip()
+
+            deal = {
+                'name': name,
+                'status': status,
+                'type': deal_type,
+                'priority': priority,
+                'states': states,
+                'ebitda': ebitda,
+                'askingPrice': asking_price,
+                'ndaStatus': nda_status,
+                'dataRoom': data_room,
+                'siteVisit': site_visit,
+                'keyContact': key_contact,
+                'nextAction': next_action,
+                'actionOwner': action_owner,
+                'deadline': deadline,
+                'lastUpdate': last_update,
+                'daysSinceUpdate': days_since,
+                'notes': notes,
+                'dealNumber': deal_num,
+            }
+            pipeline.append(deal)
+            norm_name = re.sub(r'\s+', ' ', name.lower().strip().replace('\u202f', ' ').replace('\u00a0', ' '))
+            gsheet_pipeline_by_name[norm_name] = deal
+
+        print(f"    {len(pipeline)} pipeline deals from Google Sheet")
+
+        # Fetch action items tab
+        act_url = f'https://docs.google.com/spreadsheets/d/{GSHEET_ID}/export?format=csv&gid={ACTIONS_GID}'
+        req = urllib.request.Request(act_url)
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            act_csv = resp.read().decode('utf-8')
+
+        # Skip the header rows (first 2 rows are title + blank)
+        lines = act_csv.strip().split('\n')
+        # Find the header row with "Priority,Action Item,..."
+        header_idx = None
+        for i, line in enumerate(lines):
+            if 'Action Item' in line and 'Priority' in line:
+                header_idx = i
+                break
+        if header_idx is not None:
+            csv_body = '\n'.join(lines[header_idx:])
+            reader = csv.DictReader(io.StringIO(csv_body))
+            for row in reader:
+                action_item = (row.get('Action Item') or '').strip()
+                if not action_item:
+                    continue
+                actions.append({
+                    'priority': (row.get('Priority') or '').strip(),
+                    'action': action_item,
+                    'facility': (row.get('Facility') or '').strip(),
+                    'owner': (row.get('Owner') or '').strip(),
+                    'deadline': (row.get('Deadline') or '').strip(),
+                    'status': (row.get('Status') or '').strip(),
+                    'notes': (row.get('Notes') or '').strip(),
+                    'pipelineStatus': (row.get('Pipeline Status') or '').strip(),
+                })
+            print(f"    {len(actions)} action items from Google Sheet")
+
+    except Exception as e:
+        print(f"    Google Sheet fetch error: {e}")
+        print(f"    Falling back to Airtable Negotiations only")
+
+    # ============================================================
+    # MATCH PIPELINE TO COMPANIES (Google Sheet name → Airtable company ID)
+    # ============================================================
+    # Name aliases from pipeline deal names to Airtable company names
+    PIPELINE_ALIASES = {
+        'nola detox & recovery center': 'nola detox',
+        'second chances': 'second chances addiction recovery center',
+        'serenity treatment centers': 'serenity treatment center',
+        'sanctuary': 'sanctuary louisiana',
+        'asheville detox (healthcare alliance)': 'asheville detox center',
+        'recovery now / longbranch': 'longbranch healthcare',
+        'dreamlife / crestview': 'dreamlife recovery pa',
+        'new waters': 'new waters recovery',
+        'momentum recovery': 'momentum recovery',
+        'the grove recovery': 'the grove recovery centers',
+        'sycamour': 'sycamore behavioral health',
+        'new vista / ethan crossing': 'ethan crossing addiction treatment',
+        'southeast detox / addiction ctr': 'southeast detox',
+        'cardinal': 'cardinal recovery',
+        'ghr': 'ghr center for addiction recovery and treatment',
+        'peachtree detox (evoraa)': 'peachtree detox',
+        'revive recover': 'gateway to sobriety (revive recover)',
+        'southern sky': 'southern sky recovery',
+        'the wave': 'the wave international',
+        'woodlake center': 'woodlake addiction recovery',
+        'the sylvia brafman mh center': 'the sylvia brafman mental health center',
     }
 
-    pipeline = []
-    pipeline_by_company_id = {}
+    # Build reverse lookup: company key -> company ID
+    company_key_to_id = {}
+    for comp_id, comp in company_by_id.items():
+        company_key_to_id[comp['key']] = comp_id
+
+    # Also build from Airtable Negotiations for direct ID matching
+    neg_company_ids = {}
     for r in negotiations_raw:
         f = r['fields']
-        status_raw = f.get('Status', '') or ''
-        company_names = f.get('Name (from Companies)', [])
         company_ids = f.get('Companies', [])
-        client_names = f.get('Name (from Clients)', [])
-
-        status = NEG_STATUS_MAP.get(status_raw, status_raw)
-        deal_name = ', '.join(company_names) if company_names else f'Deal #{r["id"]}'
-
-        deal = {
-            'name': deal_name,
-            'status': status,
-            'type': 'Acquisition',
-            'priority': '',
-            'client': client_names[0] if client_names else '',
-        }
-        pipeline.append(deal)
-
+        company_names = f.get('Name (from Companies)', [])
         for comp_id in company_ids:
-            pipeline_by_company_id[comp_id] = deal
+            neg_company_ids[comp_id] = True
 
-    print(f"  Pipeline: {len(pipeline)} deals")
+    pipeline_by_company_id = {}
+    matched = 0
+    for deal in pipeline:
+        norm_name = re.sub(r'\s+', ' ', deal['name'].lower().strip().replace('\u202f', ' ').replace('\u00a0', ' '))
+        # Try direct match
+        comp_id = company_key_to_id.get(norm_name)
+        # Try alias
+        if not comp_id:
+            aliased = PIPELINE_ALIASES.get(norm_name)
+            if aliased:
+                comp_id = company_key_to_id.get(aliased)
+        if comp_id:
+            pipeline_by_company_id[comp_id] = deal
+            matched += 1
+
+    print(f"  Pipeline matched to companies: {matched}/{len(pipeline)}")
 
     # ============================================================
     # GEOCODING
@@ -551,6 +688,18 @@ def main():
             'pipelineStatus': pipe['status'] if pipe else '',
             'pipelinePriority': pipe.get('priority', '') if pipe else '',
             'pipelineType': pipe.get('type', '') if pipe else '',
+            'pipelineEbitda': pipe.get('ebitda', '') if pipe else '',
+            'pipelineAskingPrice': pipe.get('askingPrice', '') if pipe else '',
+            'pipelineNda': pipe.get('ndaStatus', '') if pipe else '',
+            'pipelineDataRoom': pipe.get('dataRoom', '') if pipe else '',
+            'pipelineSiteVisit': pipe.get('siteVisit', '') if pipe else '',
+            'pipelineKeyContact': pipe.get('keyContact', '') if pipe else '',
+            'pipelineNextAction': pipe.get('nextAction', '') if pipe else '',
+            'pipelineActionOwner': pipe.get('actionOwner', '') if pipe else '',
+            'pipelineDeadline': pipe.get('deadline', '') if pipe else '',
+            'pipelineLastUpdate': pipe.get('lastUpdate', '') if pipe else '',
+            'pipelineDaysSince': pipe.get('daysSinceUpdate', '') if pipe else '',
+            'pipelineNotes': pipe.get('notes', '') if pipe else '',
             'lat': lat,
             'lng': lng,
         })

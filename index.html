@@ -376,6 +376,63 @@ body::before {
   font-size: 9px; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.5px; margin-top: 4px;
 }
+.pipeline-card-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.pipeline-card-badge {
+  display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px;
+  border-radius: 4px; font-size: 9px; font-weight: 600;
+  background: rgba(255,255,255,0.04); color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.pipeline-card-badge.nda-signed { background: rgba(16,185,129,0.1); color: #10b981; border-color: rgba(16,185,129,0.2); }
+.pipeline-card-badge.nda-sent { background: rgba(245,158,11,0.1); color: #f59e0b; border-color: rgba(245,158,11,0.2); }
+.pipeline-card-badge.nda-loi { background: rgba(139,92,246,0.1); color: #8b5cf6; border-color: rgba(139,92,246,0.2); }
+.pipeline-card-badge.data-room { background: rgba(6,182,212,0.1); color: #06b6d4; border-color: rgba(6,182,212,0.2); }
+.pipeline-card-badge.site-visited { background: rgba(59,130,246,0.1); color: #3b82f6; border-color: rgba(59,130,246,0.2); }
+.pipeline-card-notes {
+  font-size: 10px; color: var(--text-muted); margin-top: 6px;
+  padding-top: 6px; border-top: 1px solid var(--border);
+  line-height: 1.4; max-height: 0; overflow: hidden; transition: max-height 0.3s;
+}
+.pipeline-card:hover .pipeline-card-notes { max-height: 120px; }
+.pipeline-card-meta {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 6px; font-size: 9px; color: var(--text-muted);
+}
+
+/* Action Items Section */
+.action-items-section {
+  margin-top: 24px; background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 16px; padding: 20px;
+}
+.action-items-title {
+  font-size: 18px; font-weight: 800; color: var(--text-primary);
+  margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+}
+.action-items-grid { display: grid; gap: 8px; }
+.action-item-row {
+  display: grid; grid-template-columns: 80px 1fr 140px 100px 90px 80px;
+  gap: 12px; align-items: center; padding: 10px 12px;
+  background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+  border-radius: 8px; font-size: 12px; transition: all 0.2s;
+}
+.action-item-row:hover { border-color: var(--border-bright); background: rgba(255,255,255,0.04); }
+.action-priority-badge {
+  padding: 3px 8px; border-radius: 4px; font-size: 10px;
+  font-weight: 700; text-align: center; text-transform: uppercase;
+}
+.action-priority-badge.urgent { background: rgba(239,68,68,0.15); color: #ef4444; }
+.action-priority-badge.high { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.action-priority-badge.medium { background: rgba(59,130,246,0.15); color: #3b82f6; }
+.action-priority-badge.low { background: rgba(100,116,139,0.15); color: #94a3b8; }
+.action-status-badge {
+  padding: 3px 8px; border-radius: 4px; font-size: 10px;
+  font-weight: 600; text-align: center;
+}
+.action-status-badge.overdue { background: rgba(239,68,68,0.15); color: #ef4444; }
+.action-status-badge.pending { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.action-status-badge.scheduled { background: rgba(16,185,129,0.15); color: #10b981; }
+.action-status-badge.planning { background: rgba(139,92,246,0.15); color: #8b5cf6; }
+.action-status-badge.stalled { background: rgba(100,116,139,0.15); color: #94a3b8; }
 
 /* Monthly activity chart */
 .activity-chart { position: relative; height: 180px; }
@@ -594,6 +651,16 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="pipeline-stats" id="pipelineStats"></div>
         </div>
         <div class="pipeline-board" id="pipelineBoard"></div>
+
+        <!-- Action Items -->
+        <div class="action-items-section" id="actionItemsSection" style="display:none">
+          <div class="action-items-title">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-orange)" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+            Action Items
+            <span id="actionItemCount" style="font-size:12px;font-weight:500;color:var(--text-muted);margin-left:4px"></span>
+          </div>
+          <div class="action-items-grid" id="actionItemsGrid"></div>
+        </div>
       </div>
 
       <!-- Charts -->
@@ -1103,23 +1170,60 @@ function renderPipeline() {
         </div>
         ${deals.map(d => {
           const pc = PRIORITY_COLORS[d.priority] || PRIORITY_COLORS['3 - Low'];
+          const ndaCls = (d.ndaStatus||'').toLowerCase().includes('signed') ? 'nda-signed' : (d.ndaStatus||'').toLowerCase().includes('sent') ? 'nda-sent' : (d.ndaStatus||'').toLowerCase().includes('loi') ? 'nda-loi' : '';
+          const hasDR = d.dataRoom && d.dataRoom !== 'No' && d.dataRoom !== 'N/A';
+          const hasSV = d.siteVisit && d.siteVisit !== 'Visit TBD' && d.siteVisit !== 'N/A';
           return `
             <div class="pipeline-card">
               <div class="pipeline-card-name">${d.name}</div>
-              <div class="pipeline-card-detail"><strong>States:</strong> ${d.states}</div>
-              <div class="pipeline-card-detail"><strong>Type:</strong> ${d.type}</div>
-              ${d.ndaStatus !== 'N/A' && d.ndaStatus !== 'Not Started' ? `<div class="pipeline-card-detail"><strong>NDA:</strong> ${d.ndaStatus}</div>` : ''}
-              ${d.siteVisit !== 'N/A' && d.siteVisit !== 'Visit TBD' ? `<div class="pipeline-card-detail"><strong>Site Visit:</strong> ${d.siteVisit}</div>` : ''}
-              ${d.keyContact ? `<div class="pipeline-card-detail"><strong>Contact:</strong> ${d.keyContact}</div>` : ''}
-              ${d.nextAction ? `<div class="pipeline-card-detail" style="color:var(--text-secondary);margin-top:4px">${d.nextAction.substring(0, 80)}${d.nextAction.length > 80 ? '...' : ''}</div>` : ''}
-              <span class="pipeline-card-priority" style="background:${pc.bg};color:${pc.color}">${d.priority}</span>
-              ${d.status !== col.key ? `<span class="pipeline-card-priority" style="background:${col.bg};color:${col.color};margin-left:4px">${d.status}</span>` : ''}
+              <div class="pipeline-card-detail"><strong>${d.states || '—'}</strong> · ${d.type || 'TBD'}</div>
+              ${d.keyContact ? `<div class="pipeline-card-detail">👤 ${d.keyContact}</div>` : ''}
+              ${d.ebitda && d.ebitda !== 'TBD' ? `<div class="pipeline-card-detail" style="color:var(--accent-green)">💰 ${d.ebitda}</div>` : ''}
+              ${d.nextAction ? `<div class="pipeline-card-detail" style="color:var(--text-secondary);margin-top:4px">→ ${d.nextAction.substring(0, 100)}${d.nextAction.length > 100 ? '...' : ''}</div>` : ''}
+              <div class="pipeline-card-badges">
+                <span class="pipeline-card-priority" style="background:${pc.bg};color:${pc.color}">${d.priority || '—'}</span>
+                ${d.status !== col.key ? `<span class="pipeline-card-priority" style="background:${col.bg};color:${col.color}">${d.status}</span>` : ''}
+                ${ndaCls ? `<span class="pipeline-card-badge ${ndaCls}">NDA: ${d.ndaStatus}</span>` : ''}
+                ${hasDR ? `<span class="pipeline-card-badge data-room">📁 ${d.dataRoom}</span>` : ''}
+                ${hasSV ? `<span class="pipeline-card-badge site-visited">📍 ${d.siteVisit}</span>` : ''}
+              </div>
+              ${d.actionOwner || d.deadline ? `<div class="pipeline-card-meta"><span>${d.actionOwner ? '🎯 ' + d.actionOwner : ''}</span><span>${d.deadline && d.deadline !== 'TBD' ? '📅 ' + d.deadline : ''}</span></div>` : ''}
+              ${d.notes ? `<div class="pipeline-card-notes">${d.notes}</div>` : ''}
             </div>
           `;
         }).join('')}
       </div>
     `;
   }).join('');
+
+  // Render action items
+  const actionsEl = document.getElementById('actionItemsSection');
+  const actionsGrid = document.getElementById('actionItemsGrid');
+  if (DATA.actions && DATA.actions.length > 0) {
+    actionsEl.style.display = 'block';
+    document.getElementById('actionItemCount').textContent = `(${DATA.actions.length})`;
+    actionsGrid.innerHTML = DATA.actions.map(a => {
+      const pCls = (a.priority || '').toLowerCase();
+      const sCls = (a.status || '').toLowerCase().replace(/\s+/g, '-');
+      const statusMap = { 'overdue': 'overdue', 'pending': 'pending', 'scheduled': 'scheduled', 'planning': 'planning', 'stalled': 'stalled', 'not-started': 'pending', 'waiting': 'pending' };
+      const sClass = statusMap[sCls] || 'pending';
+      return `
+        <div class="action-item-row">
+          <span class="action-priority-badge ${pCls}">${a.priority}</span>
+          <div>
+            <div style="font-weight:600;color:var(--text-primary)">${a.action}</div>
+            ${a.notes ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px">${a.notes}</div>` : ''}
+          </div>
+          <div style="color:var(--text-secondary);font-size:11px">${a.facility}</div>
+          <div style="color:var(--text-muted)">${a.owner}</div>
+          <div style="color:var(--text-secondary);font-size:11px">${a.deadline}</div>
+          <span class="action-status-badge ${sClass}">${a.status}</span>
+        </div>
+      `;
+    }).join('');
+  } else {
+    actionsEl.style.display = 'none';
+  }
 }
 
 // ============================================================
