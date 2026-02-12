@@ -576,6 +576,8 @@ def main():
         'the wave': 'the wave international',
         'woodlake center': 'woodlake addiction recovery',
         'the sylvia brafman mh center': 'the sylvia brafman mental health center',
+        'turning leaf behavioral health': 'turning leaf behavioral health services',
+        'centric': 'reign residential treatment center',
     }
 
     # Build reverse lookup: company key -> company ID

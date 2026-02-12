@@ -168,6 +168,8 @@ function populateAirtableIds() {
     'Southern Sky': 'recuuA90QUFSzFgPS',
     'The Wave': 'recU5PgUeHNpgeDTp',
     'Southern Live Oak Wellness': 'reccZf1w6nXo8TyHl',
+    'Turning Leaf Behavioral Health': 'recOK29eETN3aFPkZ',
+    'Centric': 'recpKzO8XqtpD0TqH',
   };
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
