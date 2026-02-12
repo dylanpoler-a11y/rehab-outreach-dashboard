@@ -919,7 +919,7 @@ function initMap() {
   map.on('popupclose', () => clearGhostMarkers());
   map.on('click', () => {
     if (selectedCards.size > 0) { clearCardSelection(); updateMapHighlights(); }
-    if (activeKPI) { activeKPI = null; applyKPIHighlight(); document.querySelectorAll('.kpi-card[data-kpi]').forEach(c => c.classList.remove('selected','dimmed')); }
+    if (activeKPI) { activeKPI = null; applyKPIHighlight(); updateTable(); document.querySelectorAll('.kpi-card[data-kpi]').forEach(c => c.classList.remove('selected','dimmed')); }
   });
 
   // Load US state boundaries GeoJSON
@@ -1381,6 +1381,7 @@ function toggleKPI(key) {
   });
 
   applyKPIHighlight();
+  updateTable();
 }
 
 function applyKPIHighlight() {
@@ -2027,12 +2028,20 @@ function updateLegend() {
 // ============================================================
 // TABLE
 // ============================================================
+function getDisplayData() {
+  if (!activeKPI) return filteredData;
+  const kpiDef = KPI_DEFS.find(k => k.key === activeKPI);
+  if (!kpiDef) return filteredData;
+  return filteredData.filter(kpiDef.fn);
+}
+
 function updateTable() {
+  const displayData = getDisplayData();
   document.getElementById('tableContainer').innerHTML = `
     <table class="data-table"><thead><tr>
       <th>Company</th><th>State</th><th>Ownership</th><th>Msgs</th><th>Responded</th><th>Intro</th><th>Meeting</th><th>Pipeline</th><th>Status</th>
     </tr></thead><tbody>
-      ${filteredData.map(c => {
+      ${displayData.map(c => {
         const sc = c.inPipeline ? '#ec4899' : c.assistedMeeting ? '#10b981' : c.scheduledIntro ? '#8b5cf6' : c.responded ? '#3b82f6' : c.msgsSent > 0 ? '#f59e0b' : '#64748b';
         const sl = c.notInterested ? 'Not Interested' : c.inPipeline ? 'Pipeline' : c.assistedMeeting ? 'Meeting' : c.scheduledIntro ? 'Intro' : c.responded ? 'Responded' : c.msgsSent > 0 ? 'Contacted' : 'None';
         return `<tr>
