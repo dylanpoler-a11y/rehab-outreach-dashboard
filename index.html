@@ -1324,9 +1324,9 @@ function updateFilterCounts() {
 const KPI_DEFS = [
   { key: 'reached',   label: 'Companies Reached',  color: 'var(--accent-blue)',   fn: c => true },
   { key: 'messages',  label: 'Total Messages',      color: 'var(--accent-cyan)',   fn: c => c.msgsSent > 0 },
-  { key: 'responses', label: 'Responses',           color: 'var(--accent-green)',  fn: c => c.responded },
-  { key: 'intros',    label: 'Intros Scheduled',    color: 'var(--accent-purple)', fn: c => c.scheduledIntro },
-  { key: 'meetings',  label: 'Assisted Meetings',   color: 'var(--accent-orange)', fn: c => c.assistedMeeting },
+  { key: 'responses', label: 'Responses',           color: '#3b82f6',             fn: c => c.responded && !c.scheduledIntro },
+  { key: 'intros',    label: 'Intros Scheduled',    color: 'var(--accent-purple)', fn: c => c.scheduledIntro && !c.assistedMeeting },
+  { key: 'meetings',  label: 'Assisted Meetings',   color: 'var(--accent-green)',  fn: c => c.assistedMeeting },
   { key: 'pipeline',  label: 'In Pipeline',         color: 'var(--accent-pink)',   fn: c => c.inPipeline },
   { key: 'not_interested', label: 'Not Interested',  color: 'var(--accent-red)',   fn: c => c.notInterested },
 ];
@@ -1335,11 +1335,12 @@ function updateKPIs() {
   const d = filteredData;
   const totalMsgs = d.reduce((s, c) => s + c.msgsSent, 0);
   const contacted = d.filter(c => c.msgsSent > 0).length;
-  const responded = d.filter(c => c.responded).length;
-  const scheduledIntro = d.filter(c => c.scheduledIntro).length;
+  // Mutually exclusive counts (same logic as left sidebar filters)
   const assistedMeeting = d.filter(c => c.assistedMeeting).length;
+  const scheduledIntro = d.filter(c => c.scheduledIntro && !c.assistedMeeting).length;
+  const responded = d.filter(c => c.responded && !c.scheduledIntro).length;
   const inPipeline = d.filter(c => c.inPipeline).length;
-  const respRate = contacted > 0 ? ((responded/contacted)*100).toFixed(1) : '0';
+  const respRate = contacted > 0 ? ((d.filter(c => c.responded).length / contacted) * 100).toFixed(1) : '0';
 
   const kpiValues = {
     reached: { value: d.length, sub: `${contacted} contacted` },
