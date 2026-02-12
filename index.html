@@ -1501,48 +1501,68 @@ function clearCardSelection() {
   });
 }
 
+// Pipeline deal name → company name aliases (mirrors fetch_airtable.py)
+const DEAL_NAME_ALIASES = {
+  'nola detox & recovery center': 'nola detox',
+  'second chances': 'second chances addiction recovery center',
+  'serenity treatment centers': 'serenity treatment center',
+  'sanctuary': 'sanctuary louisiana',
+  'asheville detox (healthcare alliance)': 'asheville detox center',
+  'recovery now / longbranch': 'longbranch healthcare',
+  'dreamlife / crestview': 'dreamlife recovery pa',
+  'new waters': 'new waters recovery',
+  'the grove recovery': 'the grove recovery centers',
+  'sycamour': 'sycamore behavioral health',
+  'new vista / ethan crossing': 'ethan crossing addiction treatment',
+  'southeast detox / addiction ctr': 'southeast detox',
+  'cardinal': 'cardinal recovery',
+  'ghr': 'ghr center for addiction recovery and treatment',
+  'peachtree detox (evoraa)': 'peachtree detox',
+  'revive recover': 'gateway to sobriety (revive recover)',
+  'southern sky': 'southern sky recovery',
+  'the wave': 'the wave international',
+  'woodlake center': 'woodlake addiction recovery',
+  'the sylvia brafman mh center': 'the sylvia brafman mental health center',
+};
+
 function findCompanyForDeal(dealName) {
   const dn = dealName.toLowerCase().trim();
-  const pipelineCompanies = DATA.companies.filter(c => c.inPipeline && c.lat && c.lng);
-  const allCompanies = DATA.companies.filter(c => c.lat && c.lng);
 
-  // Helper: try matching against a list
-  function tryMatch(name, list) {
-    const n = name.toLowerCase().trim();
-    // Exact
-    let m = list.find(c => c.name && c.name.toLowerCase() === n);
+  // 1. Check alias table first (most reliable)
+  const aliased = DEAL_NAME_ALIASES[dn];
+  if (aliased) {
+    const m = DATA.companies.find(c => c.name && c.lat && c.lng && c.name.toLowerCase() === aliased);
     if (m) return m;
-    // Starts with
-    m = list.find(c => c.name && (c.name.toLowerCase().startsWith(n) || n.startsWith(c.name.toLowerCase())));
-    if (m) return m;
-    // Contains
-    m = list.find(c => c.name && (c.name.toLowerCase().includes(n) || n.includes(c.name.toLowerCase())));
-    if (m) return m;
-    // First two words
-    const words = n.split(/\s+/).slice(0, 2).join(' ');
-    if (words.length > 3) {
-      m = list.find(c => c.name && c.name.toLowerCase().startsWith(words));
-      if (m) return m;
-    }
-    return null;
   }
 
-  // 1. Try full name against pipeline companies first (higher priority)
-  let match = tryMatch(dn, pipelineCompanies);
+  // 2. Exact match
+  let match = DATA.companies.find(c => c.name && c.lat && c.lng && c.name.toLowerCase() === dn);
   if (match) return match;
 
-  // 2. If deal name has "/" split, try first part (e.g., "DreamLife / Crestview" → "DreamLife")
+  // 3. Starts-with (either direction)
+  match = DATA.companies.find(c => c.name && c.lat && c.lng && (c.name.toLowerCase().startsWith(dn) || dn.startsWith(c.name.toLowerCase())));
+  if (match) return match;
+
+  // 4. Contains (either direction)
+  match = DATA.companies.find(c => c.name && c.lat && c.lng && (c.name.toLowerCase().includes(dn) || dn.includes(c.name.toLowerCase())));
+  if (match) return match;
+
+  // 5. First two words match
+  const dealWords = dn.split(/\s+/).slice(0, 2).join(' ');
+  if (dealWords.length > 3) {
+    match = DATA.companies.find(c => c.name && c.lat && c.lng && c.name.toLowerCase().startsWith(dealWords));
+    if (match) return match;
+  }
+
+  // 6. Slash-split: try each part
   if (dn.includes('/')) {
-    const firstPart = dn.split('/')[0].trim();
-    match = tryMatch(firstPart, pipelineCompanies);
-    if (match) return match;
-    match = tryMatch(firstPart, allCompanies);
-    if (match) return match;
+    for (const part of dn.split('/')) {
+      const p = part.trim();
+      if (p.length < 3) continue;
+      match = DATA.companies.find(c => c.name && c.lat && c.lng && (c.name.toLowerCase().includes(p) || p.includes(c.name.toLowerCase())));
+      if (match) return match;
+    }
   }
-
-  // 3. Try full name against all companies
-  match = tryMatch(dn, allCompanies);
-  if (match) return match;
 
   return null;
 }
