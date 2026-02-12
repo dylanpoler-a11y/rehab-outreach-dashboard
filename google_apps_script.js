@@ -122,3 +122,104 @@ function testAccess() {
     Logger.log('ERROR: Could not find "Pipeline Detail" tab');
   }
 }
+
+/**
+ * RUN THIS ONCE to populate Airtable IDs in your Pipeline Detail sheet.
+ * Go to Apps Script editor > select "populateAirtableIds" > click Run
+ *
+ * It will:
+ * 1. Find or create an "Airtable ID" column
+ * 2. Match each facility name to its Airtable record ID
+ * 3. Fill in the IDs
+ */
+function populateAirtableIds() {
+  var DEAL_TO_AIRTABLE_ID = {
+    'Nola Detox & Recovery Center': 'recWmGPd7p9F3Alhp',
+    'The Grove Recovery': 'recgfSxdxg3XU5jSw',
+    'Second Chances': 'recbpyyzLMyXD3OHX',
+    'Serenity Grove': 'recjZdOxDxcDpFhem',
+    'Williamsville Wellness': 'recfbhn65z7qqk0rB',
+    'Serenity Treatment Centers': 'recDKpKlCMRePZFeh',
+    'Sanctuary': 'reciYZNJbZOBaivjt',
+    'Diamond Recovery': 'recFQ8QnVrYbNBg4j',
+    'Vizion Health': 'rec3iBLy02knkSaIz',
+    'Clearfork Academy': 'recWoP2HcCtfclrBZ',
+    'Asheville Detox (Healthcare Alliance)': 'recPTIvdwSjx1ZL8M',
+    'Southeast Detox / Addiction Ctr': 'recH5x5VAaDCjs9kj',
+    'Recovery Now / Longbranch': 'recnhD5zQaaiP8fA7',
+    'Recovery Bay Center': 'reczoLMGDwfvivZE7',
+    'Momentum Recovery': 'recDV6x81cS67WO78',
+    'New Waters': 'recWOe4SAg0zsFzV5',
+    'DreamLife / Crestview': 'rec1UYfbZr9sVx9tR',
+    'Sycamour': 'recDJP3QqxVkZzvqd',
+    'Regions Behavioral Hospital': 'reckZg3hi0q40ekNW',
+    'Riverwalk Ranch': 'recjmwvYJHmQwSJqX',
+    '7 Summit Pathways': 'recN9SqQmoK7jmrNh',
+    'Woodlake Center': 'recmhGqK46nOhEd7x',
+    'New Vista / Ethan Crossing': 'recMgyNGOxaaH0Js0',
+    'New Hope Carolinas': 'recls959IkJ2zvSzA',
+    'Advanced Rapid Detox': 'recTXRgsoOTxi3xXG',
+    'Cardinal': 'recce3UVJ3OPZG1ZM',
+    'The Sylvia Brafman MH Center': 'recvVoTmKEhwGXk7Y',
+    'Genesis Behavioral Hospital': 'recLIchoLIbsawX1s',
+    'GHR': 'recSfkUTI3ZJ5fLgS',
+    'Peachtree Detox (Evoraa)': 'rec0davfHEq47x2hz',
+    'Revive Recover': 'recRVboX9ZsZlR2YS',
+    'Southern Sky': 'recuuA90QUFSzFgPS',
+    'The Wave': 'recU5PgUeHNpgeDTp',
+    'Southern Live Oak Wellness': 'reccZf1w6nXo8TyHl',
+  };
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Pipeline Detail');
+  if (!sheet) { Logger.log('ERROR: Sheet "Pipeline Detail" not found'); return; }
+
+  var dataRange = sheet.getDataRange();
+  var values = dataRange.getValues();
+
+  // Find header row
+  var headerRow = -1;
+  var nameCol = -1;
+  for (var r = 0; r < Math.min(values.length, 10); r++) {
+    for (var c = 0; c < values[r].length; c++) {
+      if (String(values[r][c]).trim() === 'Facility Name') {
+        headerRow = r;
+        nameCol = c;
+        break;
+      }
+    }
+    if (headerRow >= 0) break;
+  }
+
+  if (headerRow < 0) { Logger.log('ERROR: Could not find "Facility Name" header'); return; }
+
+  // Find or create "Airtable ID" column
+  var aidCol = -1;
+  for (var c = 0; c < values[headerRow].length; c++) {
+    if (String(values[headerRow][c]).trim() === 'Airtable ID') {
+      aidCol = c;
+      break;
+    }
+  }
+
+  if (aidCol < 0) {
+    // Add it as the last column
+    aidCol = values[headerRow].length;
+    sheet.getRange(headerRow + 1, aidCol + 1).setValue('Airtable ID');
+    Logger.log('Created "Airtable ID" column at column ' + (aidCol + 1));
+  }
+
+  // Fill in IDs
+  var filled = 0;
+  for (var r = headerRow + 1; r < values.length; r++) {
+    var name = String(values[r][nameCol]).trim();
+    if (!name) continue;
+    var aid = DEAL_TO_AIRTABLE_ID[name];
+    if (aid) {
+      sheet.getRange(r + 1, aidCol + 1).setValue(aid);
+      filled++;
+    }
+  }
+
+  Logger.log('Done! Filled ' + filled + ' Airtable IDs out of ' + (values.length - headerRow - 1) + ' rows');
+}
