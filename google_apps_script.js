@@ -29,13 +29,13 @@ function doPost(e) {
       ).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // Open the Pipeline Detail tab
+    // Open the Pipeline Dashboard tab
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName('Pipeline Detail');
+    var sheet = ss.getSheetByName('Pipeline Dashboard');
 
     if (!sheet) {
       return ContentService.createTextOutput(
-        JSON.stringify({ success: false, error: 'Sheet "Pipeline Detail" not found' })
+        JSON.stringify({ success: false, error: 'Sheet "Pipeline Dashboard" not found' })
       ).setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -115,16 +115,16 @@ function doPost(e) {
 // Test function — run this from Apps Script to verify the sheet is accessible
 function testAccess() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName('Pipeline Detail');
+  var sheet = ss.getSheetByName('Pipeline Dashboard');
   if (sheet) {
     Logger.log('Found sheet: ' + sheet.getName() + ' with ' + sheet.getLastRow() + ' rows');
   } else {
-    Logger.log('ERROR: Could not find "Pipeline Detail" tab');
+    Logger.log('ERROR: Could not find "Pipeline Dashboard" tab');
   }
 }
 
 /**
- * RUN THIS ONCE to populate Airtable IDs in your Pipeline Detail sheet.
+ * RUN THIS ONCE to populate Airtable IDs in your Pipeline Dashboard sheet.
  * Go to Apps Script editor > select "populateAirtableIds" > click Run
  *
  * It will:
@@ -171,8 +171,8 @@ function populateAirtableIds() {
   };
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName('Pipeline Detail');
-  if (!sheet) { Logger.log('ERROR: Sheet "Pipeline Detail" not found'); return; }
+  var sheet = ss.getSheetByName('Pipeline Dashboard');
+  if (!sheet) { Logger.log('ERROR: Sheet "Pipeline Dashboard" not found'); return; }
 
   var dataRange = sheet.getDataRange();
   var values = dataRange.getValues();
