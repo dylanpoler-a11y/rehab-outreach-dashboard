@@ -1184,11 +1184,11 @@ function buildFilters() {
     pipeEl.appendChild(btn);
   });
 
-  // Outreach status filters
+  // Outreach status filters (inclusive — a company with a meeting also counts as intro scheduled)
   const statuses = [
     { key: 'assisted', label: 'Assisted Meeting', color: '#10b981', fn: c => c.assistedMeeting },
-    { key: 'scheduled', label: 'Intro Scheduled', color: '#8b5cf6', fn: c => c.scheduledIntro && !c.assistedMeeting },
-    { key: 'responded', label: 'Responded', color: '#3b82f6', fn: c => c.responded && !c.scheduledIntro },
+    { key: 'scheduled', label: 'Intro Scheduled', color: '#8b5cf6', fn: c => c.scheduledIntro },
+    { key: 'responded', label: 'Responded', color: '#3b82f6', fn: c => c.responded },
     { key: 'contacted', label: 'Contacted (No Reply)', color: '#f59e0b', fn: c => c.msgsSent > 0 && !c.responded },
     { key: 'not_interested', label: 'Not Interested', color: '#ef4444', fn: c => c.notInterested },
     { key: 'follow_up', label: 'Follow Up Later', color: '#f97316', fn: c => c.followUpLater },
@@ -1264,8 +1264,8 @@ function applyFilters() {
     if (activeFilters.status.size > 0) {
       let m = false;
       if (activeFilters.status.has('assisted') && c.assistedMeeting) m = true;
-      if (activeFilters.status.has('scheduled') && c.scheduledIntro && !c.assistedMeeting) m = true;
-      if (activeFilters.status.has('responded') && c.responded && !c.scheduledIntro) m = true;
+      if (activeFilters.status.has('scheduled') && c.scheduledIntro) m = true;
+      if (activeFilters.status.has('responded') && c.responded) m = true;
       if (activeFilters.status.has('contacted') && c.msgsSent > 0 && !c.responded) m = true;
       if (activeFilters.status.has('not_interested') && c.notInterested) m = true;
       if (activeFilters.status.has('follow_up') && c.followUpLater) m = true;
