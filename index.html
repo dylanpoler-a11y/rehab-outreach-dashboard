@@ -364,7 +364,7 @@ body::before {
 .pipeline-card {
   background: rgba(255,255,255,0.03); border: 1px solid var(--border);
   border-radius: 10px; padding: 12px; margin-bottom: 10px;
-  transition: all 0.2s; cursor: grab;
+  transition: all 0.2s; cursor: grab; position: relative;
 }
 .pipeline-card:active { cursor: grabbing; }
 .pipeline-card.sortable-ghost {
@@ -378,6 +378,34 @@ body::before {
 .pipeline-card.sortable-chosen { cursor: grabbing; }
 .pipeline-col-cards { min-height: 40px; }
 .pipeline-card:hover { border-color: var(--border-bright); transform: translateY(-1px); }
+
+/* Selected pipeline card */
+.pipeline-card.selected {
+  border-color: var(--accent-cyan);
+  background: rgba(6, 182, 212, 0.08);
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.25), inset 0 0 0 1px rgba(6, 182, 212, 0.15);
+  transform: translateY(-1px);
+}
+.pipeline-card.selected::after {
+  content: '✓'; position: absolute; top: 6px; right: 8px;
+  width: 16px; height: 16px; font-size: 10px; line-height: 16px; text-align: center;
+  background: var(--accent-cyan); color: #0a0e1a; border-radius: 50%;
+  font-weight: 800; box-shadow: 0 0 8px rgba(6,182,212,0.5);
+}
+
+/* Map highlight pulse for selected companies */
+.highlight-marker { border-radius: 50%; animation: highlight-pulse 1.5s ease-in-out infinite; }
+@keyframes highlight-pulse {
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.35); }
+}
+.highlight-tooltip {
+  background: rgba(6, 182, 212, 0.9) !important; border: none !important;
+  border-radius: 6px !important; color: white !important;
+  font-weight: 600 !important; font-size: 11px !important;
+  padding: 4px 8px !important; box-shadow: 0 2px 10px rgba(0,0,0,0.3) !important;
+}
+.highlight-tooltip::before { border-top-color: rgba(6, 182, 212, 0.9) !important; }
 .pipeline-card-name { font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
 .pipeline-card-detail { font-size: 11px; color: var(--text-muted); margin-bottom: 3px; }
 .pipeline-card-detail strong { color: var(--text-secondary); }
@@ -843,6 +871,12 @@ let map, markersLayer, ghostLayer, statesLayer;
 let activeGhostCompany = null;
 let stateGeoData = null;
 
+// Multi-select pipeline card state
+let selectedCards = new Set();
+let selectedColumn = null;
+let highlightLayer = null;
+let isDragging = false;
+
 const activeFilters = { search: '', pipeline: new Set(), status: new Set(), state: new Set(), ownership: new Set(), medium: new Set(), account: new Set() };
 
 const OWNERSHIP_COLORS = { "Mom 'n Pop": '#10b981', 'Private Equity': '#8b5cf6', 'Publicly Traded': '#3b82f6', 'Non-Profit': '#f59e0b', 'CLOSED': '#ef4444', 'GOV': '#64748b' };
@@ -875,7 +909,11 @@ function initMap() {
   statesLayer = L.layerGroup().addTo(map);
   markersLayer = L.layerGroup().addTo(map);
   ghostLayer = L.layerGroup().addTo(map);
+  highlightLayer = L.layerGroup().addTo(map);
   map.on('popupclose', () => clearGhostMarkers());
+  map.on('click', () => {
+    if (selectedCards.size > 0) { clearCardSelection(); updateMapHighlights(); }
+  });
 
   // Load US state boundaries GeoJSON
   fetch('https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json')
@@ -1257,6 +1295,10 @@ function updateKPIs() {
 function renderPipeline() {
   const pipe = DATA.pipeline;
 
+  // Clear any card selection (board is being re-rendered)
+  clearCardSelection();
+  if (highlightLayer) highlightLayer.clearLayers();
+
   // Update tab counts
   document.getElementById('tabPipelineCount').textContent = pipe ? pipe.length : 0;
   document.getElementById('tabActionsCount').textContent = DATA.actions ? DATA.actions.length : 0;
@@ -1314,8 +1356,9 @@ function renderPipeline() {
     `;
   }).join('');
 
-  // Initialize drag-and-drop after rendering
+  // Initialize drag-and-drop and card selection after rendering
   initSortable();
+  initCardSelection();
 
   // Render action items (in separate tab panel)
   const actionsGrid = document.getElementById('actionItemsGrid');
@@ -1348,7 +1391,6 @@ function renderPipeline() {
 // ============================================================
 // DRAG-AND-DROP + GOOGLE SHEETS WRITEBACK
 // ============================================================
-// ⚠️ PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE:
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyJe28uF0IM-CeCiKIHEmKSH7aJZQHYQXBB-IbhQNstiaGx3ar6MWbBfVYJNQD4kMt-/exec';
 
 function initSortable() {
@@ -1360,61 +1402,155 @@ function initSortable() {
       chosenClass: 'sortable-chosen',
       dragClass: 'sortable-drag',
       easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+      onStart: function() { isDragging = true; },
       onEnd: function (evt) {
+        setTimeout(() => { isDragging = false; }, 100);
+
         const card = evt.item;
         const dealName = card.getAttribute('data-deal-name');
-        const originalStatus = card.getAttribute('data-original-status');
         const targetCol = evt.to.getAttribute('data-status');
         const sourceCol = evt.from.getAttribute('data-status');
 
-        // If dropped in the same column, nothing to do
         if (targetCol === sourceCol) return;
 
-        // Resolve the new status string
-        const newStatus = resolveNewStatus(targetCol, originalStatus);
+        // Check if this is a multi-card move
+        if (selectedCards.has(dealName) && selectedCards.size > 1) {
+          const targetContainer = evt.to;
+          let moveCount = 0;
 
-        // Update the card's data attribute
-        card.setAttribute('data-original-status', newStatus);
+          selectedCards.forEach(selectedDealName => {
+            let cardEl, origStatus;
+            if (selectedDealName === dealName) {
+              cardEl = card;
+              origStatus = card.getAttribute('data-original-status');
+            } else {
+              cardEl = document.querySelector(`.pipeline-card[data-deal-name="${CSS.escape(selectedDealName)}"]`);
+              if (!cardEl) return;
+              origStatus = cardEl.getAttribute('data-original-status');
+              targetContainer.appendChild(cardEl);
+            }
+            const newSt = resolveNewStatus(targetCol, origStatus);
+            cardEl.setAttribute('data-original-status', newSt);
+            const deal = DATA.pipeline.find(d => d.name === selectedDealName);
+            if (deal) deal.status = newSt;
+            writeStatusToSheet(selectedDealName, newSt);
+            moveCount++;
+          });
 
-        // Update DATA.pipeline in memory (optimistic)
-        const deal = DATA.pipeline.find(d => d.name === dealName);
-        if (deal) deal.status = newStatus;
+          showToast(`Moved ${moveCount} deals → ${targetCol}`, 'success');
+          clearCardSelection();
+          updateMapHighlights();
+        } else {
+          // Single card drag
+          const originalStatus = card.getAttribute('data-original-status');
+          const newStatus = resolveNewStatus(targetCol, originalStatus);
+          card.setAttribute('data-original-status', newStatus);
+          const deal = DATA.pipeline.find(d => d.name === dealName);
+          if (deal) deal.status = newStatus;
+          writeStatusToSheet(dealName, newStatus);
+        }
 
-        // Update column counts and stats bar
         updateColumnCounts();
-
-        // Write to Google Sheets asynchronously
-        writeStatusToSheet(dealName, newStatus);
       }
     });
   });
 }
 
+// ============================================================
+// CARD SELECTION + MAP HIGHLIGHTING
+// ============================================================
+function initCardSelection() {
+  document.querySelectorAll('.pipeline-card').forEach(card => {
+    card.addEventListener('click', function(e) {
+      if (isDragging) return;
+
+      const dealName = card.getAttribute('data-deal-name');
+      const cardColumn = card.closest('.pipeline-col-cards').getAttribute('data-status');
+
+      // Clicking a card in a different column clears previous selection
+      if (selectedColumn !== null && selectedColumn !== cardColumn) {
+        clearCardSelection();
+      }
+
+      // Toggle this card
+      if (selectedCards.has(dealName)) {
+        selectedCards.delete(dealName);
+        card.classList.remove('selected');
+        if (selectedCards.size === 0) selectedColumn = null;
+      } else {
+        selectedCards.add(dealName);
+        selectedColumn = cardColumn;
+        card.classList.add('selected');
+      }
+
+      updateMapHighlights();
+    });
+  });
+}
+
+function clearCardSelection() {
+  selectedCards.clear();
+  selectedColumn = null;
+  document.querySelectorAll('.pipeline-card.selected').forEach(c => c.classList.remove('selected'));
+}
+
+function updateMapHighlights() {
+  if (highlightLayer) highlightLayer.clearLayers();
+
+  if (selectedCards.size === 0) return;
+
+  const bounds = [];
+
+  selectedCards.forEach(dealName => {
+    const company = DATA.companies.find(c => c.name && c.name.toLowerCase() === dealName.toLowerCase());
+    if (!company || !company.lat || !company.lng) return;
+
+    const color = OWNERSHIP_COLORS[company.ownership] || '#06b6d4';
+
+    const highlightIcon = L.divIcon({
+      className: 'highlight-marker',
+      html: `<div style="
+        width:28px;height:28px;border:3px solid ${color};border-radius:50%;
+        box-shadow:0 0 20px ${color}88, 0 0 40px ${color}44;
+        background:${color}22;
+      "></div>`,
+      iconSize: [28, 28], iconAnchor: [14, 14]
+    });
+
+    const hlMarker = L.marker([company.lat, company.lng], { icon: highlightIcon }).addTo(highlightLayer);
+    hlMarker.bindTooltip(company.name, {
+      permanent: true, direction: 'top', offset: [0, -16],
+      className: 'highlight-tooltip'
+    });
+
+    bounds.push([company.lat, company.lng]);
+  });
+
+  if (bounds.length > 0) {
+    if (bounds.length === 1) {
+      map.setView(bounds[0], 8, { animate: true, duration: 0.5 });
+    } else {
+      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 10, animate: true, duration: 0.5 });
+    }
+  }
+}
+
 function resolveNewStatus(targetColKey, originalStatus) {
-  // Map column key to default status value
-  // If the original status had a sub-status (e.g., "Active - Waiting on Data"),
-  // we simplify to the column's base status when moving between columns
   const statusMap = {
-    'Active': 'Active',
-    'New Lead': 'New Lead',
-    'Stand By': 'Stand By',
-    'Stalled': 'Stalled',
-    'Due Diligence': 'Due Diligence'
+    'Active': 'Active', 'New Lead': 'New Lead', 'Stand By': 'Stand By',
+    'Stalled': 'Stalled', 'Due Diligence': 'Due Diligence'
   };
   return statusMap[targetColKey] || targetColKey;
 }
 
 function updateColumnCounts() {
   const pipe = DATA.pipeline;
-  // Update each column's count badge
   document.querySelectorAll('.pipeline-col').forEach(col => {
-    const colStatus = col.getAttribute('data-status');
     const cardsInCol = col.querySelectorAll('.pipeline-col-cards .pipeline-card').length;
     const countEl = col.querySelector('.pipeline-col-count');
     if (countEl) countEl.textContent = cardsInCol;
   });
 
-  // Update the stats bar
   const active = pipe.filter(p => p.status.startsWith('Active')).length;
   const standby = pipe.filter(p => p.status === 'Stand By').length;
   const stalled = pipe.filter(p => p.status === 'Stalled').length;
