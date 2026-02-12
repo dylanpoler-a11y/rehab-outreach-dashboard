@@ -875,7 +875,7 @@ let stateGeoData = null;
 let selectedCards = new Set();
 let selectedColumn = null;
 let highlightLayer = null;
-let isDragging = false;
+let isDragging = 0; // timestamp of last drag end
 
 const activeFilters = { search: '', pipeline: new Set(), status: new Set(), state: new Set(), ownership: new Set(), medium: new Set(), account: new Set() };
 
@@ -1404,9 +1404,8 @@ function initSortable() {
       chosenClass: 'sortable-chosen',
       dragClass: 'sortable-drag',
       easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-      onStart: function() { isDragging = true; },
       onEnd: function (evt) {
-        setTimeout(() => { isDragging = false; }, 100);
+        isDragging = Date.now();
 
         const card = evt.item;
         const dealName = card.getAttribute('data-deal-name');
@@ -1464,7 +1463,8 @@ function initSortable() {
 function initCardSelection() {
   document.querySelectorAll('.pipeline-card').forEach(card => {
     card.addEventListener('click', function(e) {
-      if (isDragging) return;
+      // Skip if a drag just ended (within 200ms)
+      if (typeof isDragging === 'number' && Date.now() - isDragging < 200) return;
 
       const dealName = card.getAttribute('data-deal-name');
       const cardColumn = card.closest('.pipeline-col-cards').getAttribute('data-status');
