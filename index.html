@@ -997,15 +997,39 @@ function updateMap() {
   markersLayer.clearLayers();
   if (ghostLayer) ghostLayer.clearLayers();
   activeGhostCompany = null;
+
+  // Pre-compute KPI matching set for dimming
+  let kpiMatchNames = null, kpiMatchIds = null;
+  if (activeKPI) {
+    const kpiDef = KPI_DEFS.find(k => k.key === activeKPI);
+    if (kpiDef) {
+      kpiMatchNames = new Set();
+      kpiMatchIds = new Set();
+      filteredData.forEach(c => {
+        if (kpiDef.fn(c)) {
+          kpiMatchNames.add(c.name);
+          if (c.airtableId) kpiMatchIds.add(c.airtableId);
+        }
+      });
+    }
+  }
+
   filteredData.forEach(c => {
     if (!c.lat || !c.lng) return;
     const color = OWNERSHIP_COLORS[c.ownership] || '#64748b';
     const size = c.inPipeline ? 16 : c.assistedMeeting ? 14 : c.scheduledIntro ? 12 : c.responded ? 10 : 7;
     const glow = c.inPipeline ? 16 : c.assistedMeeting ? 12 : 6;
 
+    // Determine if this marker should be dimmed by KPI filter
+    let markerOpacity = 1;
+    if (kpiMatchNames) {
+      const isKPIMatch = (c.airtableId && kpiMatchIds.has(c.airtableId)) || kpiMatchNames.has(c.name);
+      markerOpacity = isKPIMatch ? 1 : 0.1;
+    }
+
     const icon = L.divIcon({
       className: 'custom-marker',
-      html: `<div style="width:${size}px;height:${size}px;background:${color};border-radius:50%;border:2px solid rgba(255,255,255,${c.inPipeline ? 0.8 : 0.4});box-shadow:0 0 ${glow}px ${color}80;transition:opacity 0.3s;"></div>`,
+      html: `<div style="width:${size}px;height:${size}px;background:${color};border-radius:50%;border:2px solid rgba(255,255,255,${c.inPipeline ? 0.8 : 0.4});box-shadow:0 0 ${glow}px ${color}80;transition:opacity 0.3s;opacity:${markerOpacity};"></div>`,
       iconSize: [size, size], iconAnchor: [size/2, size/2]
     });
 
@@ -1277,7 +1301,6 @@ function updateAll() {
   updateFilterCounts();
   updateKPIs();
   updateMap();
-  applyKPIHighlight();
   updateCharts();
   updateTable();
   updateLegend();
@@ -1361,38 +1384,8 @@ function toggleKPI(key) {
 }
 
 function applyKPIHighlight() {
-  if (!markersLayer) return;
-
-  if (!activeKPI) {
-    // No KPI selected — restore all markers to full opacity
-    markersLayer.eachLayer(m => {
-      const el = m.getElement();
-      if (el) el.style.opacity = '1';
-    });
-    return;
-  }
-
-  // Find the KPI filter function
-  const kpiDef = KPI_DEFS.find(k => k.key === activeKPI);
-  if (!kpiDef) return;
-
-  // Build a Set of company names/IDs that pass the KPI filter (within filteredData)
-  const matchingNames = new Set();
-  const matchingIds = new Set();
-  filteredData.forEach(c => {
-    if (kpiDef.fn(c)) {
-      matchingNames.add(c.name);
-      if (c.airtableId) matchingIds.add(c.airtableId);
-    }
-  });
-
-  // Dim non-matching markers, brighten matching ones
-  markersLayer.eachLayer(m => {
-    const el = m.getElement();
-    if (!el) return;
-    const isMatch = (m._airtableId && matchingIds.has(m._airtableId)) || matchingNames.has(m._companyName);
-    el.style.opacity = isMatch ? '1' : '0.1';
-  });
+  // Re-render map — updateMap() reads activeKPI and bakes dimming into marker icons
+  updateMap();
 }
 
 // ============================================================
