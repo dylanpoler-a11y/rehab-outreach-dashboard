@@ -724,7 +724,7 @@ def main():
     output = {
         'companies': companies,
         'pipeline': pipeline,
-        'actions': [],
+        'actions': actions,
         'meta': {
             'totalMessages': len(all_messages),
             'mediumCounts': dict(medium_counts),
