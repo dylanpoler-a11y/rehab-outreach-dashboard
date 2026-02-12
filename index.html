@@ -1004,6 +1004,7 @@ function updateMap() {
 
     const marker = L.marker([c.lat, c.lng], { icon }).addTo(markersLayer);
     marker._companyName = c.name;
+    marker._airtableId = c.airtableId || '';
     marker._companyColor = color;
 
     let statusBadge = '';
@@ -1335,7 +1336,7 @@ function renderPipeline() {
             const hasDR = d.dataRoom && d.dataRoom !== 'No' && d.dataRoom !== 'N/A';
             const hasSV = d.siteVisit && d.siteVisit !== 'Visit TBD' && d.siteVisit !== 'N/A';
             return `
-              <div class="pipeline-card" data-deal-name="${d.name}" data-original-status="${d.status}">
+              <div class="pipeline-card" data-deal-name="${d.name}" data-original-status="${d.status}" data-airtable-id="${d.airtableId || ''}">
                 <div class="pipeline-card-name">${d.name}</div>
                 <div class="pipeline-card-detail"><strong>${d.states || '—'}</strong> · ${d.type || 'TBD'}</div>
                 ${d.keyContact ? `<div class="pipeline-card-detail">👤 ${d.keyContact}</div>` : ''}
@@ -1579,15 +1580,38 @@ function updateMapHighlights() {
     return;
   }
 
-  // Find matching company names for all selected deals
-  const matchedCompanyNames = new Set();
+  // Collect airtableIds from selected card DOM elements
+  const selectedAirtableIds = new Set();
+  const selectedDealNames = new Set();
+  document.querySelectorAll('.pipeline-card.selected').forEach(card => {
+    const aid = card.getAttribute('data-airtable-id');
+    if (aid) selectedAirtableIds.add(aid);
+    selectedDealNames.add(card.getAttribute('data-deal-name'));
+  });
+
+  // Find matching companies
+  const matchedIds = new Set();
   const bounds = [];
 
-  selectedCards.forEach(dealName => {
-    const company = findCompanyForDeal(dealName);
+  // Match by airtableId first (reliable), then fuzzy name fallback
+  selectedDealNames.forEach(dealName => {
+    let company = null;
+
+    // Try airtableId from the card
+    const cardEl = document.querySelector(`.pipeline-card.selected[data-deal-name="${CSS.escape(dealName)}"]`);
+    const aid = cardEl ? cardEl.getAttribute('data-airtable-id') : '';
+    if (aid) {
+      company = DATA.companies.find(c => c.airtableId === aid && c.lat && c.lng);
+    }
+
+    // Fallback to fuzzy name matching
+    if (!company) {
+      company = findCompanyForDeal(dealName);
+    }
+
     if (!company || !company.lat || !company.lng) return;
 
-    matchedCompanyNames.add(company.name);
+    matchedIds.add(company.airtableId || company.name);
     const color = OWNERSHIP_COLORS[company.ownership] || '#06b6d4';
 
     const highlightIcon = L.divIcon({
@@ -1613,11 +1637,8 @@ function updateMapHighlights() {
   markersLayer.eachLayer(m => {
     const el = m.getElement();
     if (!el) return;
-    if (matchedCompanyNames.has(m._companyName)) {
-      el.style.opacity = '1';
-    } else {
-      el.style.opacity = '0.12';
-    }
+    const isMatch = (m._airtableId && matchedIds.has(m._airtableId)) || matchedIds.has(m._companyName);
+    el.style.opacity = isMatch ? '1' : '0.12';
   });
 
   if (bounds.length > 0) {

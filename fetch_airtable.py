@@ -604,6 +604,7 @@ def main():
             if aliased:
                 comp_id = company_key_to_id.get(aliased)
         if comp_id:
+            deal['airtableId'] = comp_id
             pipeline_by_company_id[comp_id] = deal
             matched += 1
 
@@ -659,6 +660,7 @@ def main():
         pipe = pipeline_by_company_id.get(comp_id)
 
         companies.append({
+            'airtableId': comp_id,
             'name': comp['name'],
             'address': comp['address'],
             'state': comp['state'],
