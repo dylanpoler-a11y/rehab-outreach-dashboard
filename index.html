@@ -316,7 +316,7 @@ body::before {
 .funnel-pct { font-size: 11px; color: var(--text-muted); }
 
 /* Pipeline section */
-.pipeline-section { padding: 0 32px 24px; }
+.pipeline-section { padding: 20px 32px 24px; }
 
 .pipeline-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -410,9 +410,71 @@ body::before {
   margin-top: 6px; font-size: 9px; color: var(--text-muted);
 }
 
+/* Section Tabs */
+.section-tabs {
+  display: flex; gap: 4px; padding: 0 32px; margin-top: 8px;
+}
+.section-tab {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 24px; border-radius: 12px 12px 0 0;
+  font-size: 14px; font-weight: 700; cursor: pointer;
+  border: 1px solid var(--border); border-bottom: none;
+  background: var(--bg-glass); backdrop-filter: blur(10px);
+  transition: all 0.3s ease; position: relative;
+  color: var(--text-muted); letter-spacing: 0.3px;
+  font-family: 'Inter', sans-serif;
+}
+.section-tab:hover { background: rgba(255,255,255,0.05); color: var(--text-secondary); }
+.section-tab.active { background: rgba(255,255,255,0.06); border-color: var(--border-bright); }
+.section-tab.active::after {
+  content: ''; position: absolute; bottom: -1px; left: 0; right: 0;
+  height: 2px; border-radius: 2px 2px 0 0;
+}
+
+.section-tab[data-tab="pipeline"] .tab-label {
+  background: linear-gradient(135deg, var(--accent-orange), var(--accent-pink));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.section-tab[data-tab="pipeline"].active::after {
+  background: linear-gradient(90deg, var(--accent-orange), var(--accent-pink));
+}
+
+.section-tab[data-tab="actions"] .tab-label {
+  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.section-tab[data-tab="actions"].active::after {
+  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue));
+}
+
+.section-tab[data-tab="reporting"] .tab-label {
+  background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.section-tab[data-tab="reporting"].active::after {
+  background: linear-gradient(90deg, var(--accent-purple), var(--accent-blue));
+}
+
+.section-tab .tab-icon { display: flex; align-items: center; }
+.section-tab .tab-count {
+  font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px;
+  background: rgba(255,255,255,0.06); color: var(--text-muted);
+}
+
+.section-tab[data-tab="pipeline"].active .tab-count { background: rgba(245,158,11,0.12); color: var(--accent-orange); }
+.section-tab[data-tab="actions"].active .tab-count { background: rgba(6,182,212,0.12); color: var(--accent-cyan); }
+.section-tab[data-tab="reporting"].active .tab-count { background: rgba(139,92,246,0.12); color: var(--accent-purple); }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.section-tabs-border {
+  margin: 0 32px; border-top: 1px solid var(--border-bright);
+}
+
 /* Action Items Section */
 .action-items-section {
-  margin-top: 24px; background: var(--bg-card); border: 1px solid var(--border);
+  margin: 20px 32px 24px; background: var(--bg-card); border: 1px solid var(--border);
   border-radius: 16px; padding: 20px;
 }
 .action-items-title {
@@ -667,18 +729,41 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
       <div class="table-container" id="tableContainer"></div>
 
-      <!-- Pipeline Board -->
-      <div class="pipeline-section" id="pipelineSection">
-        <div class="pipeline-header">
-          <h2>Acquisition Pipeline</h2>
-          <div class="pipeline-stats" id="pipelineStats"></div>
+      <!-- Section Tabs -->
+      <div class="section-tabs" id="sectionTabs">
+        <div class="section-tab active" data-tab="pipeline" onclick="switchTab('pipeline')">
+          <span class="tab-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
+          <span class="tab-label">Acquisition Pipeline</span>
+          <span class="tab-count" id="tabPipelineCount">0</span>
         </div>
-        <div class="pipeline-board" id="pipelineBoard"></div>
+        <div class="section-tab" data-tab="actions" onclick="switchTab('actions')">
+          <span class="tab-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></span>
+          <span class="tab-label">Action Items</span>
+          <span class="tab-count" id="tabActionsCount">0</span>
+        </div>
+        <div class="section-tab" data-tab="reporting" onclick="switchTab('reporting')">
+          <span class="tab-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg></span>
+          <span class="tab-label">Reporting</span>
+        </div>
+      </div>
+      <div class="section-tabs-border"></div>
 
-        <!-- Action Items -->
-        <div class="action-items-section" id="actionItemsSection" style="display:none">
+      <!-- Pipeline Tab Panel -->
+      <div class="tab-panel active" id="panelPipeline" data-panel="pipeline">
+        <div class="pipeline-section" id="pipelineSection">
+          <div class="pipeline-header">
+            <h2>Acquisition Pipeline</h2>
+            <div class="pipeline-stats" id="pipelineStats"></div>
+          </div>
+          <div class="pipeline-board" id="pipelineBoard"></div>
+        </div>
+      </div>
+
+      <!-- Action Items Tab Panel -->
+      <div class="tab-panel" id="panelActions" data-panel="actions">
+        <div class="action-items-section" id="actionItemsSection">
           <div class="action-items-title">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-orange)" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
             Action Items
             <span id="actionItemCount" style="font-size:12px;font-weight:500;color:var(--text-muted);margin-left:4px"></span>
           </div>
@@ -686,8 +771,9 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       </div>
 
-      <!-- Charts -->
-      <div class="charts-section" id="chartsSection">
+      <!-- Reporting Tab Panel -->
+      <div class="tab-panel" id="panelReporting" data-panel="reporting">
+        <div class="charts-section" id="chartsSection">
         <div class="chart-card animate-in">
           <div class="chart-title">Outreach Funnel</div>
           <div class="funnel" id="funnelChart"></div>
@@ -719,6 +805,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="chart-title">State Tier Distribution</div>
           <div class="donut-container" id="tierDonut"></div>
         </div>
+      </div>
       </div>
     </div>
   </div>
@@ -1169,6 +1256,11 @@ function updateKPIs() {
 // ============================================================
 function renderPipeline() {
   const pipe = DATA.pipeline;
+
+  // Update tab counts
+  document.getElementById('tabPipelineCount').textContent = pipe ? pipe.length : 0;
+  document.getElementById('tabActionsCount').textContent = DATA.actions ? DATA.actions.length : 0;
+
   if (!pipe || pipe.length === 0) { document.getElementById('pipelineSection').style.display = 'none'; return; }
 
   const active = pipe.filter(p => p.status.startsWith('Active')).length;
@@ -1225,11 +1317,9 @@ function renderPipeline() {
   // Initialize drag-and-drop after rendering
   initSortable();
 
-  // Render action items
-  const actionsEl = document.getElementById('actionItemsSection');
+  // Render action items (in separate tab panel)
   const actionsGrid = document.getElementById('actionItemsGrid');
   if (DATA.actions && DATA.actions.length > 0) {
-    actionsEl.style.display = 'block';
     document.getElementById('actionItemCount').textContent = `(${DATA.actions.length})`;
     actionsGrid.innerHTML = DATA.actions.map(a => {
       const pCls = (a.priority || '').toLowerCase();
@@ -1251,7 +1341,7 @@ function renderPipeline() {
       `;
     }).join('');
   } else {
-    actionsEl.style.display = 'none';
+    actionsGrid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)">No action items</div>';
   }
 }
 
@@ -1616,6 +1706,20 @@ function setView(view) {
   const tableEl = document.getElementById('tableContainer');
   if (view === 'map') { mapWrap.style.display = 'block'; tableEl.style.display = 'none'; setTimeout(() => map.invalidateSize(), 100); }
   else { mapWrap.style.display = 'none'; tableEl.style.display = 'block'; }
+}
+
+// ============================================================
+// SECTION TAB SWITCHING
+// ============================================================
+function switchTab(tabName) {
+  // Update tab buttons
+  document.querySelectorAll('.section-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.section-tab[data-tab="${tabName}"]`).classList.add('active');
+
+  // Update panels
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  const panelMap = { pipeline: 'panelPipeline', actions: 'panelActions', reporting: 'panelReporting' };
+  document.getElementById(panelMap[tabName]).classList.add('active');
 }
 
 // ============================================================
