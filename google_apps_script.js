@@ -17,7 +17,7 @@
  * 10. Paste that URL into your index.html where it says APPS_SCRIPT_URL = ''
  */
 
-// Field key -> Google Sheet column header mapping
+// Field key -> Google Sheet column header mapping (Pipeline Dashboard tab)
 var FIELD_TO_HEADER = {
   'status': 'Status', 'priority': 'Priority', 'type': 'Type',
   'states': 'State(s)', 'keyContact': 'Key Contact',
@@ -27,19 +27,53 @@ var FIELD_TO_HEADER = {
   'deadline': 'Deadline', 'notes': 'Notes', 'lastUpdate': 'Last Update'
 };
 
+// Action item field key -> Action Items tab column header mapping
+var ACTION_FIELD_TO_HEADER = {
+  'priority': 'Priority', 'action': 'Action Item', 'facility': 'Facility',
+  'owner': 'Owner', 'deadline': 'Deadline', 'status': 'Status',
+  'notes': 'Notes', 'pipelineStatus': 'Pipeline Status'
+};
+
+// Name of the Action Items tab in Google Sheets
+var ACTION_ITEMS_TAB = 'Action Items';
+
 function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
-    var dealName = data.dealName;
-
-    // Open the Pipeline Dashboard tab
     var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // ============================================================
+    // ACTION ITEM: Edit existing action item
+    // Payload: { actionItem: "text", actionFields: { key: val } }
+    // ============================================================
+    if (data.actionItem && data.actionFields) {
+      return handleActionEdit(ss, data.actionItem, data.actionFields);
+    }
+
+    // ============================================================
+    // ACTION ITEM: Create new action item
+    // Payload: { newAction: { priority, action, facility, ... } }
+    // ============================================================
+    if (data.newAction) {
+      return handleNewAction(ss, data.newAction);
+    }
+
+    // ============================================================
+    // ACTION ITEM: Toggle done status
+    // Payload: { actionDone: "text", done: true/false }
+    // ============================================================
+    if (data.actionDone !== undefined) {
+      return handleActionDone(ss, data.actionDone, data.done);
+    }
+
+    // ============================================================
+    // PIPELINE: Deal updates (existing functionality)
+    // ============================================================
+    var dealName = data.dealName;
     var sheet = ss.getSheetByName('Pipeline Dashboard');
 
     if (!sheet) {
-      return ContentService.createTextOutput(
-        JSON.stringify({ success: false, error: 'Sheet "Pipeline Dashboard" not found' })
-      ).setMimeType(ContentService.MimeType.JSON);
+      return jsonResponse({ success: false, error: 'Sheet "Pipeline Dashboard" not found' });
     }
 
     var dataRange = sheet.getDataRange();
@@ -61,9 +95,7 @@ function doPost(e) {
     }
 
     if (headerRow < 0 || nameCol < 0) {
-      return ContentService.createTextOutput(
-        JSON.stringify({ success: false, error: 'Could not find "Facility Name" header' })
-      ).setMimeType(ContentService.MimeType.JSON);
+      return jsonResponse({ success: false, error: 'Could not find "Facility Name" header' });
     }
 
     // Build column index map from headers
@@ -80,23 +112,17 @@ function doPost(e) {
     }
 
     if (dealRow < 0) {
-      return ContentService.createTextOutput(
-        JSON.stringify({ success: false, error: 'Deal "' + dealName + '" not found in sheet' })
-      ).setMimeType(ContentService.MimeType.JSON);
+      return jsonResponse({ success: false, error: 'Deal "' + dealName + '" not found in sheet' });
     }
 
     // Legacy path: status-only update (from drag-and-drop)
     if (data.newStatus && !data.fields) {
       var statusCol = colMap['Status'];
       if (statusCol === undefined) {
-        return ContentService.createTextOutput(
-          JSON.stringify({ success: false, error: 'Could not find "Status" column' })
-        ).setMimeType(ContentService.MimeType.JSON);
+        return jsonResponse({ success: false, error: 'Could not find "Status" column' });
       }
       sheet.getRange(dealRow + 1, statusCol + 1).setValue(data.newStatus);
-      return ContentService.createTextOutput(
-        JSON.stringify({ success: true, deal: dealName, newStatus: data.newStatus })
-      ).setMimeType(ContentService.MimeType.JSON);
+      return jsonResponse({ success: true, deal: dealName, newStatus: data.newStatus });
     }
 
     // Multi-field update path (from edit popover)
@@ -108,20 +134,144 @@ function doPost(e) {
         sheet.getRange(dealRow + 1, colMap[header] + 1).setValue(data.fields[fieldKey]);
         updatedFields.push(fieldKey);
       }
-      return ContentService.createTextOutput(
-        JSON.stringify({ success: true, deal: dealName, updated: updatedFields })
-      ).setMimeType(ContentService.MimeType.JSON);
+      return jsonResponse({ success: true, deal: dealName, updated: updatedFields });
     }
 
-    return ContentService.createTextOutput(
-      JSON.stringify({ success: false, error: 'Missing newStatus or fields' })
-    ).setMimeType(ContentService.MimeType.JSON);
+    return jsonResponse({ success: false, error: 'Missing newStatus or fields' });
 
   } catch (err) {
-    return ContentService.createTextOutput(
-      JSON.stringify({ success: false, error: err.toString() })
-    ).setMimeType(ContentService.MimeType.JSON);
+    return jsonResponse({ success: false, error: err.toString() });
   }
+}
+
+// ============================================================
+// Helper: JSON response
+// ============================================================
+function jsonResponse(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+// ============================================================
+// Helper: Get Action Items sheet info (header row, column map)
+// ============================================================
+function getActionSheet(ss) {
+  var sheet = ss.getSheetByName(ACTION_ITEMS_TAB);
+  if (!sheet) return null;
+
+  var dataRange = sheet.getDataRange();
+  var values = dataRange.getValues();
+
+  // Find header row containing "Action Item" and "Priority"
+  var headerRow = -1;
+  for (var r = 0; r < Math.min(values.length, 10); r++) {
+    var row = values[r].map(function(c) { return String(c).trim(); });
+    if (row.indexOf('Action Item') >= 0 && row.indexOf('Priority') >= 0) {
+      headerRow = r;
+      break;
+    }
+  }
+  if (headerRow < 0) return null;
+
+  var colMap = {};
+  for (var c = 0; c < values[headerRow].length; c++) {
+    colMap[String(values[headerRow][c]).trim()] = c;
+  }
+
+  return { sheet: sheet, values: values, headerRow: headerRow, colMap: colMap };
+}
+
+// ============================================================
+// Handle action item edit: find row by "Action Item" text, update fields
+// ============================================================
+function handleActionEdit(ss, actionItemText, fields) {
+  var info = getActionSheet(ss);
+  if (!info) return jsonResponse({ success: false, error: 'Action Items tab not found' });
+
+  var actionCol = info.colMap['Action Item'];
+  if (actionCol === undefined) return jsonResponse({ success: false, error: 'Action Item column not found' });
+
+  // Find the row matching the action item text
+  var targetRow = -1;
+  for (var r = info.headerRow + 1; r < info.values.length; r++) {
+    if (String(info.values[r][actionCol]).trim() === actionItemText) {
+      targetRow = r;
+      break;
+    }
+  }
+
+  if (targetRow < 0) {
+    return jsonResponse({ success: false, error: 'Action item not found: "' + actionItemText + '"' });
+  }
+
+  var updatedFields = [];
+  for (var fieldKey in fields) {
+    var header = ACTION_FIELD_TO_HEADER[fieldKey];
+    if (!header || info.colMap[header] === undefined) continue;
+    info.sheet.getRange(targetRow + 1, info.colMap[header] + 1).setValue(fields[fieldKey]);
+    updatedFields.push(fieldKey);
+  }
+
+  return jsonResponse({ success: true, action: 'edit', updated: updatedFields });
+}
+
+// ============================================================
+// Handle new action item: append row to Action Items tab
+// ============================================================
+function handleNewAction(ss, actionData) {
+  var info = getActionSheet(ss);
+  if (!info) return jsonResponse({ success: false, error: 'Action Items tab not found' });
+
+  // Build a new row array matching the header columns
+  var newRow = [];
+  for (var c = 0; c < info.values[info.headerRow].length; c++) {
+    newRow.push(''); // initialize empty
+  }
+
+  // Fill in values from actionData using the mapping
+  for (var fieldKey in actionData) {
+    var header = ACTION_FIELD_TO_HEADER[fieldKey];
+    if (header && info.colMap[header] !== undefined) {
+      newRow[info.colMap[header]] = actionData[fieldKey];
+    }
+  }
+
+  // Append to the sheet
+  info.sheet.appendRow(newRow);
+
+  return jsonResponse({ success: true, action: 'create' });
+}
+
+// ============================================================
+// Handle action done toggle: update Status column to "Done" or previous value
+// ============================================================
+function handleActionDone(ss, actionItemText, isDone) {
+  var info = getActionSheet(ss);
+  if (!info) return jsonResponse({ success: false, error: 'Action Items tab not found' });
+
+  var actionCol = info.colMap['Action Item'];
+  var statusCol = info.colMap['Status'];
+  if (actionCol === undefined || statusCol === undefined) {
+    return jsonResponse({ success: false, error: 'Required columns not found' });
+  }
+
+  // Find the row
+  var targetRow = -1;
+  for (var r = info.headerRow + 1; r < info.values.length; r++) {
+    if (String(info.values[r][actionCol]).trim() === actionItemText) {
+      targetRow = r;
+      break;
+    }
+  }
+
+  if (targetRow < 0) {
+    return jsonResponse({ success: false, error: 'Action item not found' });
+  }
+
+  // Set status to "Done" or restore to "Pending" when un-done
+  var newStatus = isDone ? 'Done' : 'Pending';
+  info.sheet.getRange(targetRow + 1, statusCol + 1).setValue(newStatus);
+
+  return jsonResponse({ success: true, action: 'done', done: isDone });
 }
 
 // Test function — run this from Apps Script to verify the sheet is accessible

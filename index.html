@@ -2211,22 +2211,25 @@ function renderActionItems() {
       e.stopPropagation();
       const idx = parseInt(this.dataset.idx);
       const row = this.closest('.action-item-row');
+      const isDone = !actionDoneSet.has(idx);
 
-      if (actionDoneSet.has(idx)) {
-        actionDoneSet.delete(idx);
-        row.classList.remove('done');
-      } else {
+      if (isDone) {
         actionDoneSet.add(idx);
         row.classList.add('done');
         if (!actionShowDone) {
-          // Animate out then re-render
           row.classList.add('hiding');
           setTimeout(() => { renderActionItems(); refreshPipelineCardActions(); }, 350);
+          writeActionDoneToSheet(DATA.actions[idx], true);
+          try { localStorage.setItem('actionDoneSet', JSON.stringify([...actionDoneSet])); } catch(e) {}
           return;
         }
+      } else {
+        actionDoneSet.delete(idx);
+        row.classList.remove('done');
       }
-      // Save to localStorage
+      // Save to localStorage + sheet
       try { localStorage.setItem('actionDoneSet', JSON.stringify([...actionDoneSet])); } catch(e) {}
+      writeActionDoneToSheet(DATA.actions[idx], isDone);
       renderActionItems();
       refreshPipelineCardActions();
     });
@@ -2596,6 +2599,19 @@ async function writeActionFieldsToSheet(action, changes) {
     });
   } catch (err) {
     console.warn('Action write-back error:', err.message);
+  }
+}
+
+async function writeActionDoneToSheet(action, isDone) {
+  if (!APPS_SCRIPT_URL || !action) return;
+  try {
+    await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ actionDone: action.action, done: isDone })
+    });
+  } catch (err) {
+    console.warn('Action done write-back error:', err.message);
   }
 }
 
@@ -3078,16 +3094,18 @@ function openDealEditPopover(dealName, cardElement) {
       e.stopPropagation();
       const idx = parseInt(this.dataset.idx);
       const item = this.closest('.linked-action-item');
-      if (actionDoneSet.has(idx)) {
-        actionDoneSet.delete(idx);
-        this.classList.remove('checked');
-        item.classList.remove('is-done');
-      } else {
+      const isDone = !actionDoneSet.has(idx);
+      if (isDone) {
         actionDoneSet.add(idx);
         this.classList.add('checked');
         item.classList.add('is-done');
+      } else {
+        actionDoneSet.delete(idx);
+        this.classList.remove('checked');
+        item.classList.remove('is-done');
       }
       try { localStorage.setItem('actionDoneSet', JSON.stringify([...actionDoneSet])); } catch(e) {}
+      writeActionDoneToSheet(DATA.actions[idx], isDone);
       // Update the pending count label
       const label = container.querySelector('.deal-edit-label span');
       if (label) {
