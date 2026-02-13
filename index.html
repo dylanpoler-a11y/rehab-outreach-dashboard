@@ -177,26 +177,18 @@ body::before {
 
 .filter-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
-/* Reorder arrows for filter priority */
-.reorder-arrows {
-  display: inline-flex; flex-direction: column; gap: 0; flex-shrink: 0;
-  opacity: 0.4; transition: opacity 0.15s;
-}
-.filter-btn:hover .reorder-arrows { opacity: 1; }
-.reorder-arrow {
-  background: none; border: none; color: var(--text-muted); cursor: pointer;
-  font-size: 8px; line-height: 8px; padding: 0px 3px; border-radius: 3px; transition: all 0.15s;
-  font-family: inherit; display: block;
-}
-.reorder-arrow:hover { color: var(--accent-cyan); background: rgba(6,182,212,0.15); }
+/* Drag-and-drop reorder for filter priority */
+.sortable-filter .filter-btn { cursor: grab; }
+.sortable-filter .filter-btn:active { cursor: grabbing; }
+.filter-btn.sortable-ghost { opacity: 0.2; border: 1px dashed var(--accent-cyan); }
+.filter-btn.sortable-drag { opacity: 1; background: rgba(6,182,212,0.12); border-color: var(--accent-cyan); box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 9999; cursor: grabbing; }
+.filter-btn.sortable-chosen { cursor: grabbing; }
 
 .filter-count {
-  font-size: 10px; font-weight: 600;
+  margin-left: auto; font-size: 10px; font-weight: 600;
   color: var(--text-muted); background: rgba(255,255,255,0.05);
   padding: 2px 7px; border-radius: 6px;
 }
-/* Push count + arrows to right side */
-.filter-label-text { flex: 1; }
 .filter-btn.active .filter-count { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
 
 /* Solo-highlighted filter (clicked for map isolation) */
@@ -211,8 +203,6 @@ body::before {
 .filter-section.has-solo .filter-btn:not(.solo) { opacity: 0.35; }
 .filter-section.has-solo .filter-btn:not(.solo):hover { opacity: 0.6; }
 
-/* Filter reorder animation */
-.filter-btn.reorder-move { transition: transform 0.2s ease; }
 
 .search-wrap { position: relative; margin-bottom: 20px; }
 
@@ -1271,9 +1261,8 @@ function buildFilters() {
     btn.dataset.filterType = 'pipeline';
     btn.dataset.filterKey = item.key;
     btn.dataset.filterColor = item.color;
-    btn.innerHTML = `<span class="filter-dot" style="background:${item.color}"></span><span class="filter-label-text">${item.label}</span><span class="filter-count">${item.count}</span><span class="reorder-arrows"><button class="reorder-arrow" data-dir="up" title="Move up">&#9650;</button><button class="reorder-arrow" data-dir="down" title="Move down">&#9660;</button></span>`;
-    btn.addEventListener('click', (e) => {
-      if (e.target.closest('.reorder-arrow')) return;
+    btn.innerHTML = `<span class="filter-dot" style="background:${item.color}"></span>${item.label}<span class="filter-count">${item.count}</span>`;
+    btn.addEventListener('click', () => {
       if (activeFilters.pipeline.has(item.key)) {
         activeFilters.pipeline.delete(item.key);
         btn.classList.remove('active');
@@ -1287,8 +1276,21 @@ function buildFilters() {
     pipeEl.appendChild(btn);
   });
 
-  // Wire up reorder arrows for pipeline
-  initReorderArrows(pipeEl, 'pipeline');
+  // Make pipeline filters drag-and-drop for color priority
+  pipeEl.classList.add('sortable-filter');
+  new Sortable(pipeEl, {
+    animation: 200,
+    ghostClass: 'sortable-ghost',
+    chosenClass: 'sortable-chosen',
+    dragClass: 'sortable-drag',
+    forceFallback: true,
+    fallbackClass: 'sortable-drag',
+    delay: 120,
+    delayOnTouchOnly: false,
+    onEnd: function() {
+      if (mapColorMode === 'pipeline') { updateMap(); updateLegend(); }
+    }
+  });
 
   // Outreach status filters (inclusive — a company with a meeting also counts as intro scheduled)
   const statuses = [
@@ -1338,10 +1340,8 @@ function renderFilterGroup(containerId, items, filterType, companies) {
     btn.dataset.filterType = filterType;
     btn.dataset.filterKey = item.key;
     btn.dataset.filterColor = item.color;
-    const arrowsHtml = isSortable ? '<span class="reorder-arrows"><button class="reorder-arrow" data-dir="up" title="Move up">&#9650;</button><button class="reorder-arrow" data-dir="down" title="Move down">&#9660;</button></span>' : '';
-    btn.innerHTML = `<span class="filter-dot" style="background:${item.color}"></span><span class="filter-label-text">${item.label}</span><span class="filter-count">${count}</span>${arrowsHtml}`;
-    btn.addEventListener('click', (e) => {
-      if (e.target.closest('.reorder-arrow')) return;
+    btn.innerHTML = `<span class="filter-dot" style="background:${item.color}"></span>${item.label}<span class="filter-count">${count}</span>`;
+    btn.addEventListener('click', () => {
       if (activeFilters[filterType].has(item.key)) {
         activeFilters[filterType].delete(item.key);
         btn.classList.remove('active');
@@ -1355,40 +1355,23 @@ function renderFilterGroup(containerId, items, filterType, companies) {
     el.appendChild(btn);
   });
 
-  // Wire up reorder arrows for colorable sections
+  // Make colorable sections drag-and-drop for priority reorder
   if (isSortable) {
-    initReorderArrows(el, isSortable);
+    el.classList.add('sortable-filter');
+    new Sortable(el, {
+      animation: 200,
+      ghostClass: 'sortable-ghost',
+      chosenClass: 'sortable-chosen',
+      dragClass: 'sortable-drag',
+      forceFallback: true,
+      fallbackClass: 'sortable-drag',
+      delay: 120,
+      delayOnTouchOnly: false,
+      onEnd: function() {
+        if (mapColorMode === isSortable) { updateMap(); updateLegend(); }
+      }
+    });
   }
-}
-
-// Reorder arrows: move filter buttons up/down to change color priority
-function initReorderArrows(container, colorMode) {
-  container.addEventListener('click', function(e) {
-    const arrowBtn = e.target.closest('.reorder-arrow');
-    if (!arrowBtn) return;
-    e.stopPropagation();
-
-    const filterBtn = arrowBtn.closest('.filter-btn');
-    if (!filterBtn) return;
-
-    const dir = arrowBtn.dataset.dir;
-    const siblings = [...container.querySelectorAll('.filter-btn')];
-    const idx = siblings.indexOf(filterBtn);
-
-    if (dir === 'up' && idx > 0) {
-      container.insertBefore(filterBtn, siblings[idx - 1]);
-    } else if (dir === 'down' && idx < siblings.length - 1) {
-      container.insertBefore(siblings[idx + 1], filterBtn);
-    } else {
-      return; // already at top/bottom
-    }
-
-    // Update map if this section controls colors
-    if (mapColorMode === colorMode) {
-      updateMap();
-      updateLegend();
-    }
-  });
 }
 
 // Determine solo filter state based on active filters in the current color-mode section
