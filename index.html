@@ -654,14 +654,85 @@ body::before {
   font-size: 18px; font-weight: 800; color: var(--text-primary);
   margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
 }
-.action-items-grid { display: grid; gap: 8px; }
+/* Action Items Toolbar */
+.action-toolbar {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+  flex-wrap: wrap; padding-bottom: 12px; border-bottom: 1px solid var(--border);
+}
+.action-toolbar-group { display: flex; align-items: center; gap: 6px; }
+.action-toolbar-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
+.action-toolbar-select {
+  padding: 5px 10px; background: var(--bg-glass); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text-secondary); font-size: 11px;
+  font-family: inherit; cursor: pointer; outline: none; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 8px center;
+  padding-right: 24px;
+}
+.action-toolbar-select:focus { border-color: var(--accent-blue); }
+.action-toolbar-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+.action-show-done {
+  display: flex; align-items: center; gap: 6px; cursor: pointer;
+  font-size: 11px; color: var(--text-muted); user-select: none;
+  padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg-glass); transition: all 0.2s;
+}
+.action-show-done:hover { border-color: var(--border-bright); color: var(--text-secondary); }
+.action-show-done.active { border-color: rgba(16,185,129,0.3); color: #10b981; background: rgba(16,185,129,0.08); }
+.action-show-done-check { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--border-bright); display: flex; align-items: center; justify-content: center; font-size: 10px; transition: all 0.2s; }
+.action-show-done.active .action-show-done-check { background: #10b981; border-color: #10b981; color: #0a0e1a; }
+
+/* Action Items Grid + Column Header */
+.action-items-grid { display: grid; gap: 6px; }
+.action-items-header {
+  display: grid; grid-template-columns: 32px 80px 1fr 140px 100px 90px 80px 28px;
+  gap: 12px; padding: 6px 12px; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);
+}
+.action-items-header span { cursor: pointer; user-select: none; transition: color 0.2s; }
+.action-items-header span:hover { color: var(--text-secondary); }
+.action-items-header span.sorted { color: var(--accent-cyan); }
+
+/* Group headers */
+.action-group-header {
+  padding: 8px 12px; margin-top: 8px; font-size: 11px; font-weight: 700;
+  color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Updated row with checkbox + edit column */
 .action-item-row {
-  display: grid; grid-template-columns: 80px 1fr 140px 100px 90px 80px;
+  display: grid; grid-template-columns: 32px 80px 1fr 140px 100px 90px 80px 28px;
   gap: 12px; align-items: center; padding: 10px 12px;
   background: rgba(255,255,255,0.02); border: 1px solid var(--border);
-  border-radius: 8px; font-size: 12px; transition: all 0.2s;
+  border-radius: 8px; font-size: 12px; transition: all 0.3s;
 }
 .action-item-row:hover { border-color: var(--border-bright); background: rgba(255,255,255,0.04); }
+.action-item-row.done {
+  opacity: 0.4; text-decoration: line-through; text-decoration-color: var(--text-muted);
+}
+.action-item-row.done:hover { opacity: 0.7; }
+.action-item-row.hiding { opacity: 0; transform: translateX(-20px); max-height: 0; padding: 0 12px; margin: 0; overflow: hidden; }
+
+/* Done checkbox */
+.action-done-btn {
+  width: 22px; height: 22px; border-radius: 6px;
+  border: 2px solid var(--border-bright); background: transparent;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s; color: transparent; font-size: 12px;
+}
+.action-done-btn:hover { border-color: #10b981; background: rgba(16,185,129,0.1); color: rgba(16,185,129,0.5); }
+.action-item-row.done .action-done-btn { border-color: #10b981; background: #10b981; color: #0a0e1a; }
+
+/* Edit button on action item */
+.action-edit-btn {
+  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid transparent; border-radius: 6px;
+  color: var(--text-muted); font-size: 16px; cursor: pointer;
+  opacity: 0; transition: all 0.2s;
+}
+.action-item-row:hover .action-edit-btn { opacity: 1; }
+.action-edit-btn:hover { background: rgba(255,255,255,0.1); border-color: var(--border-bright); color: var(--text-primary); }
 .action-priority-badge {
   padding: 3px 8px; border-radius: 4px; font-size: 10px;
   font-weight: 700; text-align: center; text-transform: uppercase;
@@ -939,6 +1010,28 @@ document.addEventListener('DOMContentLoaded', () => {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
             Action Items
             <span id="actionItemCount" style="font-size:12px;font-weight:500;color:var(--text-muted);margin-left:4px"></span>
+          </div>
+          <div class="action-toolbar" id="actionToolbar">
+            <div class="action-toolbar-group">
+              <span class="action-toolbar-label">Filter:</span>
+              <select class="action-toolbar-select" id="actionFilterPriority"><option value="">All Priorities</option><option>URGENT</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option></select>
+              <select class="action-toolbar-select" id="actionFilterStatus"><option value="">All Statuses</option><option>Overdue</option><option>Pending</option><option>Scheduled</option><option>Planning</option><option>Waiting</option><option>Not Started</option><option>Stalled</option></select>
+              <select class="action-toolbar-select" id="actionFilterOwner"></select>
+            </div>
+            <div class="action-toolbar-sep"></div>
+            <div class="action-toolbar-group">
+              <span class="action-toolbar-label">Sort:</span>
+              <select class="action-toolbar-select" id="actionSort"><option value="priority">Priority</option><option value="status">Status</option><option value="owner">Owner</option><option value="facility">Facility</option><option value="deadline">Deadline</option></select>
+            </div>
+            <div class="action-toolbar-sep"></div>
+            <div class="action-toolbar-group">
+              <span class="action-toolbar-label">Group:</span>
+              <select class="action-toolbar-select" id="actionGroupBy"><option value="">None</option><option value="priority">Priority</option><option value="status">Status</option><option value="owner">Owner</option><option value="facility">Facility</option></select>
+            </div>
+            <div class="action-toolbar-sep"></div>
+            <div class="action-show-done" id="actionShowDone" title="Show completed items">
+              <span class="action-show-done-check">&#10003;</span> Show Done
+            </div>
           </div>
           <div class="action-items-grid" id="actionItemsGrid"></div>
         </div>
@@ -1868,31 +1961,312 @@ function renderPipeline() {
   initCardSelection();
   wireAllEditButtons();
 
-  // Render action items (in separate tab panel)
-  const actionsGrid = document.getElementById('actionItemsGrid');
-  if (DATA.actions && DATA.actions.length > 0) {
-    document.getElementById('actionItemCount').textContent = `(${DATA.actions.length})`;
-    actionsGrid.innerHTML = DATA.actions.map(a => {
-      const pCls = (a.priority || '').toLowerCase();
-      const sCls = (a.status || '').toLowerCase().replace(/\s+/g, '-');
-      const statusMap = { 'overdue': 'overdue', 'pending': 'pending', 'scheduled': 'scheduled', 'planning': 'planning', 'stalled': 'stalled', 'not-started': 'pending', 'waiting': 'pending' };
-      const sClass = statusMap[sCls] || 'pending';
-      return `
-        <div class="action-item-row">
-          <span class="action-priority-badge ${pCls}">${a.priority}</span>
-          <div>
-            <div style="font-weight:600;color:var(--text-primary)">${a.action}</div>
-            ${a.notes ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px">${a.notes}</div>` : ''}
-          </div>
-          <div style="color:var(--text-secondary);font-size:11px">${a.facility}</div>
-          <div style="color:var(--text-muted)">${a.owner}</div>
-          <div style="color:var(--text-secondary);font-size:11px">${a.deadline}</div>
-          <span class="action-status-badge ${sClass}">${a.status}</span>
+  // Initialize action items system
+  initActionItems();
+  renderActionItems();
+}
+
+// ============================================================
+// ACTION ITEMS SYSTEM
+// ============================================================
+let actionDoneSet = new Set(); // indices of completed actions
+let actionShowDone = false;
+
+function initActionItems() {
+  // Load done state from localStorage
+  try {
+    const saved = localStorage.getItem('actionDoneSet');
+    if (saved) actionDoneSet = new Set(JSON.parse(saved));
+  } catch(e) {}
+
+  // Populate owner filter from data
+  const ownerSelect = document.getElementById('actionFilterOwner');
+  if (ownerSelect) {
+    const owners = new Set();
+    (DATA.actions || []).forEach(a => { if (a.owner) a.owner.split(/[\/,&]+/).map(s => s.trim()).filter(Boolean).forEach(o => owners.add(o)); });
+    ownerSelect.innerHTML = '<option value="">All Owners</option>' + [...owners].sort().map(o => `<option>${o}</option>`).join('');
+  }
+
+  // Wire toolbar controls
+  ['actionFilterPriority', 'actionFilterStatus', 'actionFilterOwner', 'actionSort', 'actionGroupBy'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', renderActionItems);
+  });
+
+  // Show done toggle
+  const showDoneBtn = document.getElementById('actionShowDone');
+  if (showDoneBtn) {
+    showDoneBtn.addEventListener('click', () => {
+      actionShowDone = !actionShowDone;
+      showDoneBtn.classList.toggle('active', actionShowDone);
+      renderActionItems();
+    });
+  }
+}
+
+function renderActionItems() {
+  const grid = document.getElementById('actionItemsGrid');
+  if (!DATA.actions || DATA.actions.length === 0) {
+    grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)">No action items</div>';
+    document.getElementById('actionItemCount').textContent = '(0)';
+    return;
+  }
+
+  // Build indexed list
+  let items = DATA.actions.map((a, i) => ({ ...a, _idx: i, _done: actionDoneSet.has(i) }));
+
+  // Filter
+  const fPriority = document.getElementById('actionFilterPriority')?.value || '';
+  const fStatus = document.getElementById('actionFilterStatus')?.value || '';
+  const fOwner = document.getElementById('actionFilterOwner')?.value || '';
+
+  if (fPriority) items = items.filter(a => a.priority === fPriority);
+  if (fStatus) items = items.filter(a => a.status === fStatus);
+  if (fOwner) items = items.filter(a => (a.owner || '').includes(fOwner));
+
+  // Hide done unless toggled
+  if (!actionShowDone) items = items.filter(a => !a._done);
+
+  // Sort
+  const sortKey = document.getElementById('actionSort')?.value || 'priority';
+  const priorityOrder = { 'URGENT': 0, 'HIGH': 1, 'MEDIUM': 2, 'LOW': 3 };
+  const statusOrder = { 'Overdue': 0, 'Pending': 1, 'Not Started': 2, 'Waiting': 3, 'Scheduled': 4, 'Planning': 5, 'Stalled': 6 };
+
+  items.sort((a, b) => {
+    // Done items always at bottom
+    if (a._done !== b._done) return a._done ? 1 : -1;
+    if (sortKey === 'priority') return (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9);
+    if (sortKey === 'status') return (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9);
+    if (sortKey === 'owner') return (a.owner || '').localeCompare(b.owner || '');
+    if (sortKey === 'facility') return (a.facility || '').localeCompare(b.facility || '');
+    if (sortKey === 'deadline') return (a.deadline || 'zzz').localeCompare(b.deadline || 'zzz');
+    return 0;
+  });
+
+  // Group
+  const groupBy = document.getElementById('actionGroupBy')?.value || '';
+  let html = '';
+
+  // Column header
+  html += `<div class="action-items-header">
+    <span></span><span>Priority</span><span>Action</span><span>Facility</span><span>Owner</span><span>Deadline</span><span>Status</span><span></span>
+  </div>`;
+
+  const statusMap = { 'overdue': 'overdue', 'pending': 'pending', 'scheduled': 'scheduled', 'planning': 'planning', 'stalled': 'stalled', 'not-started': 'pending', 'waiting': 'pending' };
+
+  function renderRow(a) {
+    const pCls = (a.priority || '').toLowerCase();
+    const sCls = (a.status || '').toLowerCase().replace(/\s+/g, '-');
+    const sClass = statusMap[sCls] || 'pending';
+    return `
+      <div class="action-item-row ${a._done ? 'done' : ''}" data-action-idx="${a._idx}">
+        <button class="action-done-btn" data-idx="${a._idx}" title="${a._done ? 'Mark undone' : 'Mark done'}">&#10003;</button>
+        <span class="action-priority-badge ${pCls}">${a.priority}</span>
+        <div>
+          <div style="font-weight:600;color:var(--text-primary)">${a.action}</div>
+          ${a.notes ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px">${a.notes}</div>` : ''}
         </div>
-      `;
-    }).join('');
+        <div style="color:var(--text-secondary);font-size:11px">${a.facility}</div>
+        <div style="color:var(--text-muted)">${a.owner}</div>
+        <div style="color:var(--text-secondary);font-size:11px">${a.deadline}</div>
+        <span class="action-status-badge ${sClass}">${a.status}</span>
+        <button class="action-edit-btn" data-idx="${a._idx}" title="Edit">&#8942;</button>
+      </div>`;
+  }
+
+  if (groupBy) {
+    const groups = {};
+    items.forEach(a => {
+      const key = a[groupBy] || 'Other';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(a);
+    });
+    // Sort group keys
+    const groupKeys = Object.keys(groups).sort((a, b) => {
+      if (groupBy === 'priority') return (priorityOrder[a] ?? 9) - (priorityOrder[b] ?? 9);
+      if (groupBy === 'status') return (statusOrder[a] ?? 9) - (statusOrder[b] ?? 9);
+      return a.localeCompare(b);
+    });
+    groupKeys.forEach(key => {
+      html += `<div class="action-group-header">${key} <span style="font-weight:400;opacity:0.5">(${groups[key].length})</span></div>`;
+      groups[key].forEach(a => { html += renderRow(a); });
+    });
   } else {
-    actionsGrid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)">No action items</div>';
+    items.forEach(a => { html += renderRow(a); });
+  }
+
+  grid.innerHTML = html;
+
+  // Update counts
+  const totalVisible = items.length;
+  const totalDone = DATA.actions.filter((_, i) => actionDoneSet.has(i)).length;
+  document.getElementById('actionItemCount').textContent = `(${totalVisible}${totalDone > 0 ? ` / ${totalDone} done` : ''})`;
+  document.getElementById('tabActionsCount').textContent = DATA.actions.length - totalDone;
+
+  // Wire done buttons
+  grid.querySelectorAll('.action-done-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const idx = parseInt(this.dataset.idx);
+      const row = this.closest('.action-item-row');
+
+      if (actionDoneSet.has(idx)) {
+        actionDoneSet.delete(idx);
+        row.classList.remove('done');
+      } else {
+        actionDoneSet.add(idx);
+        row.classList.add('done');
+        if (!actionShowDone) {
+          // Animate out then re-render
+          row.classList.add('hiding');
+          setTimeout(() => renderActionItems(), 350);
+          return;
+        }
+      }
+      // Save to localStorage
+      try { localStorage.setItem('actionDoneSet', JSON.stringify([...actionDoneSet])); } catch(e) {}
+      renderActionItems();
+    });
+  });
+
+  // Wire edit buttons
+  grid.querySelectorAll('.action-edit-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const idx = parseInt(this.dataset.idx);
+      const action = DATA.actions[idx];
+      if (action) openActionEditPopover(action, idx, this.closest('.action-item-row'));
+    });
+  });
+}
+
+// ============================================================
+// ACTION ITEM EDIT POPOVER (reuses deal edit popover UI)
+// ============================================================
+const ACTION_EDIT_FIELDS = [
+  { key: 'priority', label: 'Priority', type: 'single-select',
+    options: ['URGENT', 'HIGH', 'MEDIUM', 'LOW'],
+    chipClass: k => k === 'URGENT' ? 'chip-high' : k === 'HIGH' ? 'chip-medium' : k === 'MEDIUM' ? 'chip-sent' : 'chip-low' },
+  { key: 'action', label: 'Action Item', type: 'textarea' },
+  { key: 'facility', label: 'Facility', type: 'text' },
+  { key: 'owner', label: 'Owner', type: 'text' },
+  { key: 'deadline', label: 'Deadline', type: 'text' },
+  { key: 'status', label: 'Status', type: 'single-select',
+    options: ['Overdue', 'Pending', 'Not Started', 'Waiting', 'Scheduled', 'Planning', 'Stalled'],
+    chipClass: k => k === 'Overdue' ? 'chip-high' : k === 'Scheduled' ? 'chip-signed' : k === 'Planning' ? 'chip-loi' : k === 'Stalled' ? 'chip-low' : '' },
+  { key: 'notes', label: 'Notes', type: 'textarea' },
+];
+
+let editingAction = null;
+let editingActionIdx = null;
+let editActionFormValues = {};
+
+function openActionEditPopover(action, idx, rowEl) {
+  editingAction = action;
+  editingActionIdx = idx;
+  editActionFormValues = {};
+
+  document.getElementById('dealEditTitle').textContent = 'Edit Action Item';
+
+  const container = document.getElementById('dealEditFields');
+  container.innerHTML = ACTION_EDIT_FIELDS.map(field => {
+    const currentVal = action[field.key] || '';
+    editActionFormValues[field.key] = currentVal;
+
+    if (field.type === 'single-select') {
+      const chips = field.options.map(opt => {
+        const isSelected = currentVal === opt;
+        const cls = field.chipClass ? field.chipClass(opt) : '';
+        return `<button class="deal-edit-chip ${cls} ${isSelected ? 'selected' : ''}" data-field="${field.key}" data-value="${opt}">${opt}</button>`;
+      }).join('');
+      return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div><div class="deal-edit-chips" data-field="${field.key}" data-mode="single">${chips}</div></div>`;
+    }
+
+    if (field.type === 'textarea') {
+      return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div><textarea class="deal-edit-input deal-edit-textarea" data-field="${field.key}">${currentVal}</textarea></div>`;
+    }
+
+    return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div><input class="deal-edit-input" type="text" data-field="${field.key}" value="${currentVal.replace(/"/g, '&quot;')}"></div>`;
+  }).join('');
+
+  // Wire chips
+  container.querySelectorAll('.deal-edit-chip').forEach(chip => {
+    chip.addEventListener('click', function() {
+      const fieldKey = this.dataset.field;
+      this.closest('.deal-edit-chips').querySelectorAll('.deal-edit-chip').forEach(c => c.classList.remove('selected'));
+      this.classList.add('selected');
+      editActionFormValues[fieldKey] = this.dataset.value;
+    });
+  });
+
+  // Wire text inputs
+  container.querySelectorAll('.deal-edit-input').forEach(input => {
+    input.addEventListener('input', function() {
+      editActionFormValues[this.dataset.field] = this.value;
+    });
+  });
+
+  // Swap save handler temporarily
+  const saveBtn = document.getElementById('dealEditSave');
+  const newSave = saveBtn.cloneNode(true);
+  saveBtn.parentNode.replaceChild(newSave, saveBtn);
+  newSave.addEventListener('click', saveActionEdits);
+
+  positionPopover(rowEl);
+  document.getElementById('dealEditPopover').classList.add('open');
+  document.getElementById('dealEditBackdrop').classList.add('open');
+}
+
+async function saveActionEdits() {
+  if (editingAction === null) return;
+
+  const saveBtn = document.getElementById('dealEditSave');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving...';
+
+  const changes = {};
+  ACTION_EDIT_FIELDS.forEach(field => {
+    const newVal = editActionFormValues[field.key];
+    if (newVal !== undefined && newVal !== (editingAction[field.key] || '')) {
+      changes[field.key] = newVal;
+    }
+  });
+
+  if (Object.keys(changes).length === 0) {
+    showToast('No changes to save', 'pending');
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save Changes';
+    closeDealEditPopover();
+    editingAction = null;
+    editingActionIdx = null;
+    return;
+  }
+
+  // Apply in memory
+  Object.assign(editingAction, changes);
+
+  // Write to Google Sheet action items tab
+  writeActionFieldsToSheet(editingAction, changes);
+
+  showToast(`Updated action item`, 'success');
+  saveBtn.disabled = false;
+  saveBtn.textContent = 'Save Changes';
+  closeDealEditPopover();
+  editingAction = null;
+  editingActionIdx = null;
+  renderActionItems();
+}
+
+async function writeActionFieldsToSheet(action, changes) {
+  if (!APPS_SCRIPT_URL) return;
+  try {
+    await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ actionItem: action.action, actionFields: changes })
+    });
+  } catch (err) {
+    console.warn('Action write-back error:', err.message);
   }
 }
 
