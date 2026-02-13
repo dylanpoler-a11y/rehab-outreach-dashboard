@@ -561,6 +561,8 @@ body::before {
   outline: none; transition: border-color 0.2s;
 }
 .deal-edit-input:focus { border-color: var(--accent-blue); }
+.deal-edit-date { cursor: pointer; color-scheme: dark; }
+.deal-edit-date::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
 .deal-edit-textarea { resize: vertical; min-height: 60px; }
 .deal-edit-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .deal-edit-chip {
@@ -2089,6 +2091,30 @@ let actionDoneSet = new Set(); // indices of completed actions
 const actionPrevStatusMap = new Map(); // idx -> previous status before marking done
 let actionShowDone = false;
 
+// Convert various date text formats to YYYY-MM-DD for <input type="date">
+function toDateInputValue(text) {
+  if (!text) return '';
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  // MM/DD/YYYY or M/D/YYYY
+  const mdy = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mdy) return `${mdy[3]}-${mdy[1].padStart(2,'0')}-${mdy[2].padStart(2,'0')}`;
+  // Try native Date parsing as fallback
+  const d = new Date(text);
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().split('T')[0];
+  }
+  return '';
+}
+
+// Convert YYYY-MM-DD back to display format MM/DD/YYYY
+function fromDateInputValue(isoDate) {
+  if (!isoDate) return '';
+  const parts = isoDate.split('-');
+  if (parts.length === 3) return `${parseInt(parts[1])}/${parseInt(parts[2])}/${parts[0]}`;
+  return isoDate;
+}
+
 function matchesDeal(dealName, facility) {
   const dealLower = dealName.toLowerCase();
   const facLower = (facility || '').toLowerCase();
@@ -2333,7 +2359,7 @@ const ACTION_EDIT_FIELDS = [
   { key: 'facility', label: 'Facility', type: 'search-select',
     optionsFn: () => DATA.pipeline.map(d => d.name).sort() },
   { key: 'owner', label: 'Owner', type: 'text' },
-  { key: 'deadline', label: 'Deadline', type: 'text' },
+  { key: 'deadline', label: 'Deadline', type: 'date' },
   { key: 'status', label: 'Status', type: 'single-select',
     options: ['Overdue', 'Pending', 'Not Started', 'Waiting', 'Scheduled', 'Planning', 'Stalled'],
     chipClass: k => k === 'Overdue' ? 'chip-high' : k === 'Scheduled' ? 'chip-signed' : k === 'Planning' ? 'chip-loi' : k === 'Stalled' ? 'chip-low' : '' },
@@ -2379,6 +2405,11 @@ function openActionEditPopover(action, idx, rowEl) {
         </div></div>`;
     }
 
+    if (field.type === 'date') {
+      const dateVal = toDateInputValue(currentVal);
+      return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div><input class="deal-edit-input deal-edit-date" type="date" data-field="${field.key}" value="${dateVal}"></div>`;
+    }
+
     return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div><input class="deal-edit-input" type="text" data-field="${field.key}" value="${currentVal.replace(/"/g, '&quot;')}"></div>`;
   }).join('');
 
@@ -2392,8 +2423,15 @@ function openActionEditPopover(action, idx, rowEl) {
     });
   });
 
-  // Wire text inputs (exclude search-select inputs - they have their own handler)
-  container.querySelectorAll('.deal-edit-input:not(.search-select-input)').forEach(input => {
+  // Wire date inputs — convert back to display format on change
+  container.querySelectorAll('.deal-edit-date').forEach(input => {
+    input.addEventListener('change', function() {
+      editActionFormValues[this.dataset.field] = fromDateInputValue(this.value);
+    });
+  });
+
+  // Wire text inputs (exclude search-select and date inputs - they have their own handlers)
+  container.querySelectorAll('.deal-edit-input:not(.search-select-input):not(.deal-edit-date)').forEach(input => {
     input.addEventListener('input', function() {
       editActionFormValues[this.dataset.field] = this.value;
     });
@@ -2537,6 +2575,11 @@ function openCreateActionPopover(prefillFacility, anchorEl) {
         </div></div>`;
     }
 
+    if (field.type === 'date') {
+      const dateVal = toDateInputValue(currentVal);
+      return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div><input class="deal-edit-input deal-edit-date" type="date" data-field="${field.key}" value="${dateVal}"></div>`;
+    }
+
     return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div><input class="deal-edit-input" type="text" data-field="${field.key}" value="${currentVal.replace(/"/g, '&quot;')}"></div>`;
   }).join('');
 
@@ -2550,8 +2593,15 @@ function openCreateActionPopover(prefillFacility, anchorEl) {
     });
   });
 
-  // Wire text inputs (exclude search-select)
-  container.querySelectorAll('.deal-edit-input:not(.search-select-input)').forEach(input => {
+  // Wire date inputs
+  container.querySelectorAll('.deal-edit-date').forEach(input => {
+    input.addEventListener('change', function() {
+      editActionFormValues[this.dataset.field] = fromDateInputValue(this.value);
+    });
+  });
+
+  // Wire text inputs (exclude search-select and date)
+  container.querySelectorAll('.deal-edit-input:not(.search-select-input):not(.deal-edit-date)').forEach(input => {
     input.addEventListener('input', function() {
       editActionFormValues[this.dataset.field] = this.value;
     });
@@ -3158,7 +3208,7 @@ const DEAL_EDIT_FIELDS = [
       return [...owners].sort();
     },
     chipClass: () => '' },
-  { key: 'deadline', label: 'Deadline', type: 'text' },
+  { key: 'deadline', label: 'Deadline', type: 'date' },
   { key: 'notes', label: 'Notes', type: 'textarea' },
 ];
 
@@ -3234,6 +3284,11 @@ function openDealEditPopover(dealName, cardElement) {
       return html;
     }
 
+    if (field.type === 'date') {
+      const dateVal = toDateInputValue(currentVal);
+      return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div><input class="deal-edit-input deal-edit-date" type="date" data-field="${field.key}" value="${dateVal}"></div>`;
+    }
+
     return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div><input class="deal-edit-input" type="text" data-field="${field.key}" value="${currentVal.replace(/"/g, '&quot;')}"></div>`;
   }).join('');
 
@@ -3257,8 +3312,15 @@ function openDealEditPopover(dealName, cardElement) {
     });
   });
 
-  // Wire text input handlers
-  container.querySelectorAll('.deal-edit-input').forEach(input => {
+  // Wire date inputs
+  container.querySelectorAll('.deal-edit-date').forEach(input => {
+    input.addEventListener('change', function() {
+      editFormValues[this.dataset.field] = fromDateInputValue(this.value);
+    });
+  });
+
+  // Wire text input handlers (exclude date inputs)
+  container.querySelectorAll('.deal-edit-input:not(.deal-edit-date)').forEach(input => {
     input.addEventListener('input', function() {
       editFormValues[this.dataset.field] = this.value;
     });
