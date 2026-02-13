@@ -86,16 +86,7 @@ body::before {
 .header-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 .header-right { display: flex; align-items: center; gap: 12px; }
 
-.upload-btn {
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 20px;
-  background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
-  border: none; border-radius: 10px;
-  color: white; font-weight: 600; font-size: 13px;
-  cursor: pointer; transition: all 0.3s; font-family: inherit;
-}
-.upload-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 20px var(--glow-blue); }
-.upload-btn svg { width: 16px; height: 16px; }
+
 .refresh-group { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .refresh-btn {
   display: flex; align-items: center; gap: 8px;
@@ -884,47 +875,6 @@ body::before {
 .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
 
 /* Upload modal */
-.modal-overlay {
-  display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
-  z-index: 2000; align-items: center; justify-content: center;
-}
-.modal-overlay.show { display: flex; }
-
-.modal {
-  background: var(--bg-secondary); border: 1px solid var(--border-bright);
-  border-radius: 20px; padding: 32px; width: 560px; max-width: 90vw;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-}
-.modal h2 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
-.modal p { color: var(--text-secondary); font-size: 14px; margin-bottom: 24px; line-height: 1.5; }
-
-.drop-zone {
-  border: 2px dashed var(--border-bright); border-radius: 16px;
-  padding: 48px 24px; text-align: center; transition: all 0.3s;
-  cursor: pointer; margin-bottom: 20px;
-}
-.drop-zone.dragover { border-color: var(--accent-blue); background: rgba(59, 130, 246, 0.05); }
-
-.drop-zone-icon {
-  width: 48px; height: 48px; margin: 0 auto 16px;
-  background: rgba(59, 130, 246, 0.1); border-radius: 14px;
-  display: flex; align-items: center; justify-content: center; color: var(--accent-blue);
-}
-.drop-zone-text { font-size: 14px; color: var(--text-secondary); margin-bottom: 4px; }
-.drop-zone-hint { font-size: 12px; color: var(--text-muted); }
-
-.modal-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px; }
-
-.btn-secondary {
-  padding: 10px 20px; background: var(--bg-glass); border: 1px solid var(--border);
-  border-radius: 10px; color: var(--text-secondary); font-weight: 600;
-  font-size: 13px; cursor: pointer; font-family: inherit;
-}
-
-.upload-status { padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; display: none; }
-.upload-status.success { display: block; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); color: var(--accent-green); }
-.upload-status.error { display: block; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: var(--accent-red); }
 
 /* Section dividers */
 .section-divider {
@@ -1027,10 +977,6 @@ document.addEventListener('DOMContentLoaded', () => {
           </span>
         </div>
       </div>
-      <button class="upload-btn" onclick="openUploadModal()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-        Upload CSV
-      </button>
     </div>
   </header>
 
@@ -1183,24 +1129,6 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
 
 <!-- Upload Modal -->
-<div class="modal-overlay" id="uploadModal">
-  <div class="modal">
-    <h2>Upload New CSV Data</h2>
-    <p>Upload your Grid View CSV (message-level export from your outreach CRM). Each row should be a message with columns like Company, Date Sent, Message Medium, Responded, Scheduled Intro Call, Assisted Meeting, etc.</p>
-    <div class="drop-zone" id="dropZone">
-      <div class="drop-zone-icon">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-      </div>
-      <div class="drop-zone-text">Drop your CSV file here or click to browse</div>
-      <div class="drop-zone-hint">Supports .csv files (Grid View export format)</div>
-    </div>
-    <input type="file" id="fileInput" accept=".csv" style="display:none">
-    <div class="upload-status" id="uploadStatus"></div>
-    <div class="modal-actions">
-      <button class="btn-secondary" onclick="closeUploadModal()">Cancel</button>
-    </div>
-  </div>
-</div>
 
 <!-- Deal Edit Popover (singleton, repositioned per card) -->
 <div class="deal-edit-backdrop" id="dealEditBackdrop"></div>
@@ -3946,44 +3874,7 @@ function switchTab(tabName) {
 }
 
 // ============================================================
-// CSV UPLOAD (Grid View format)
-// ============================================================
-function openUploadModal() { document.getElementById('uploadModal').classList.add('show'); }
-function closeUploadModal() { document.getElementById('uploadModal').classList.remove('show'); document.getElementById('uploadStatus').className = 'upload-status'; }
 
-function parseCSVString(text) {
-  const lines = []; let current = '', inQuotes = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (ch === '"') { if (inQuotes && text[i+1] === '"') { current += '"'; i++; } else inQuotes = !inQuotes; }
-    else if (ch === '\n' && !inQuotes) { lines.push(current); current = ''; }
-    else if (ch === '\r' && !inQuotes) { /* skip */ }
-    else current += ch;
-  }
-  if (current.trim()) lines.push(current);
-  if (lines.length === 0) return [];
-  const headers = parseCSVLine(lines[0]);
-  const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const vals = parseCSVLine(lines[i]);
-    const obj = {};
-    headers.forEach((h, idx) => { obj[h.replace(/^\uFEFF/, '')] = vals[idx] || ''; });
-    rows.push(obj);
-  }
-  return rows;
-}
-
-function parseCSVLine(line) {
-  const result = []; let current = '', inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') { if (inQuotes && line[i+1] === '"') { current += '"'; i++; } else inQuotes = !inQuotes; }
-    else if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
-    else current += ch;
-  }
-  result.push(current.trim());
-  return result;
-}
 
 const STATE_COORDS_JS = {"AL":[32.81,-86.79],"AK":[61.37,-152.40],"AZ":[33.73,-111.43],"AR":[34.97,-92.37],"CA":[36.12,-119.68],"CO":[39.06,-105.31],"CT":[41.60,-72.76],"DE":[39.32,-75.51],"FL":[27.77,-81.69],"GA":[33.04,-83.64],"HI":[21.09,-157.50],"ID":[44.24,-114.48],"IL":[40.35,-88.99],"IN":[39.85,-86.26],"IA":[42.01,-93.21],"KS":[38.53,-96.73],"KY":[37.67,-84.67],"LA":[31.17,-91.87],"ME":[44.69,-69.38],"MD":[39.06,-76.80],"MA":[42.23,-71.53],"MI":[43.33,-84.54],"MN":[45.69,-93.90],"MS":[32.74,-89.68],"MO":[38.46,-92.29],"MT":[46.92,-110.45],"NE":[41.13,-98.27],"NV":[38.31,-117.06],"NH":[43.45,-71.56],"NJ":[40.30,-74.52],"NM":[34.84,-106.25],"NY":[42.17,-74.95],"NC":[35.63,-79.81],"ND":[47.53,-99.78],"OH":[40.39,-82.76],"OK":[35.57,-96.93],"OR":[44.57,-122.07],"PA":[40.59,-77.21],"RI":[41.68,-71.51],"SC":[33.86,-80.95],"SD":[44.30,-99.44],"TN":[35.75,-86.69],"TX":[31.05,-97.56],"UT":[40.15,-111.86],"VT":[44.05,-72.71],"VA":[37.77,-78.17],"WA":[47.40,-121.49],"WV":[38.49,-80.95],"WI":[44.27,-89.62],"WY":[42.76,-107.30],"DC":[38.90,-77.03]};
 const STATE_ABBREV_JS = {"Alabama":"AL","Alaska":"AK","Arizona":"AZ","Arkansas":"AR","California":"CA","Colorado":"CO","Connecticut":"CT","Delaware":"DE","Florida":"FL","Georgia":"GA","Hawaii":"HI","Idaho":"ID","Illinois":"IL","Indiana":"IN","Iowa":"IA","Kansas":"KS","Kentucky":"KY","Louisiana":"LA","Maine":"ME","Maryland":"MD","Massachusetts":"MA","Michigan":"MI","Minnesota":"MN","Mississippi":"MS","Missouri":"MO","Montana":"MT","Nebraska":"NE","Nevada":"NV","New Hampshire":"NH","New Jersey":"NJ","New Mexico":"NM","New York":"NY","North Carolina":"NC","North Dakota":"ND","Ohio":"OH","Oklahoma":"OK","Oregon":"OR","Pennsylvania":"PA","Rhode Island":"RI","South Carolina":"SC","South Dakota":"SD","Tennessee":"TN","Texas":"TX","Utah":"UT","Vermont":"VT","Virginia":"VA","Washington":"WA","West Virginia":"WV","Wisconsin":"WI","Wyoming":"WY"};
@@ -4005,132 +3896,6 @@ function getCoords(state, name) {
   return [lat, lng];
 }
 
-function processUploadedCSV(text) {
-  const rows = parseCSVString(text);
-  if (rows.length === 0) { showUploadStatus('No valid data found in CSV', 'error'); return; }
-
-  // Aggregate by company
-  const compMap = {};
-  const medCounts = {}, acctCounts = {}, monthlyCounts = {};
-
-  rows.forEach(r => {
-    const raw = (r['Companies (from Contacts)'] || '').trim();
-    if (!raw) return;
-    const primary = raw.split(',')[0].trim();
-    const key = primary.toLowerCase();
-
-    if (!compMap[key]) {
-      compMap[key] = {
-        name: primary, address: '', state: '', fullState: '', ownership: '', override: false,
-        website: '', allStates: '', stateTier: '', msgsSent: 0, byMedium: {}, byAccount: {},
-        responded: false, respondedCount: 0, scheduledIntro: false, assistedMeeting: false,
-        notInterested: false, followUpLater: false, contactCount: 0, contacts: [],
-        firstMsg: '', lastMsg: '', meetingDate: '', opened: false, viewedProfile: false,
-        inPipeline: false, pipelineStatus: '', pipelinePriority: '', pipelineType: '', lat: null, lng: null,
-        _contacts: new Set(), _states: new Set(), _fullStates: new Set(),
-      };
-    }
-    const c = compMap[key];
-    c.msgsSent++;
-
-    const med = (r['Message Medium'] || '').trim();
-    if (med) { c.byMedium[med] = (c.byMedium[med] || 0) + 1; medCounts[med] = (medCounts[med] || 0) + 1; }
-
-    const acct = (r['Account'] || '').trim();
-    if (acct) { c.byAccount[acct] = (c.byAccount[acct] || 0) + 1; acctCounts[acct] = (acctCounts[acct] || 0) + 1; }
-
-    const contact = (r['Contacts'] || '').trim();
-    if (contact) c._contacts.add(contact);
-
-    if ((r['Responded'] || '').trim() === 'checked') { c.responded = true; c.respondedCount++; }
-
-    const sched = (r['Scheduled Intro Call'] || '').trim().toUpperCase();
-    if (sched === 'TRUE') c.scheduledIntro = true;
-
-    const assisted = (r['Assisted Meeting'] || '').trim().toUpperCase();
-    if (assisted === 'TRUE') c.assistedMeeting = true;
-
-    const ni = (r['Not Interested'] || '').trim().toUpperCase();
-    if (ni === 'NOT INTERESTED') c.notInterested = true;
-    if (ni === 'FOLLOW UP LATER') c.followUpLater = true;
-
-    const states = (r['State(s) (from Companies) (from Contacts)'] || '').trim();
-    if (states) states.split(',').forEach(s => { s = s.trim(); if (s) c._states.add(s); });
-
-    const fullStates = (r['Full HQ State Name (from Companies) (from Contacts)'] || '').trim();
-    if (fullStates) fullStates.split(',').forEach(s => { s = s.trim(); if (s) c._fullStates.add(s); });
-
-    const own = (r['Ownership (from Companies) (from Contacts)'] || '').trim();
-    if (own) c.ownership = own.split(',')[0].trim();
-
-    const override = (r['Override (from Companies) (from Contacts)'] || '').trim();
-    if (override.toLowerCase().includes('checked')) c.override = true;
-
-    const tier = (r['State Tier (from Companies) (from Contacts)'] || '').trim();
-    if (tier) c.stateTier = tier.split(',')[0].trim();
-
-    const meetDate = (r['Meeting Date'] || '').trim();
-    if (meetDate) c.meetingDate = meetDate;
-
-    const dateSent = (r['Date Sent'] || '').trim();
-    if (dateSent) {
-      if (!c.firstMsg || dateSent < c.firstMsg) c.firstMsg = dateSent;
-      if (!c.lastMsg || dateSent > c.lastMsg) c.lastMsg = dateSent;
-      const mm = dateSent.match(/^(\d{1,2})\/\d{1,2}\/(\d{4})/);
-      if (mm) { const mk = `${mm[2]}-${mm[1].padStart(2, '0')}`; monthlyCounts[mk] = (monthlyCounts[mk] || 0) + 1; }
-    }
-  });
-
-  // Finalize companies
-  const companies = Object.values(compMap).map(c => {
-    c.contacts = Array.from(c._contacts);
-    c.contactCount = c._contacts.size;
-    c.allStates = Array.from(c._fullStates).join(', ') || Array.from(c._states).join(', ');
-    c.fullState = c._fullStates.size > 0 ? Array.from(c._fullStates)[0] : '';
-    const stateForCoords = c._fullStates.size > 0 ? Array.from(c._fullStates)[0] : (c._states.size > 0 ? Array.from(c._states)[0] : '');
-    [c.lat, c.lng] = getCoords(stateForCoords, c.name);
-    c.state = stateForCoords.length > 2 ? (STATE_ABBREV_JS[stateForCoords] || stateForCoords) : stateForCoords;
-    delete c._contacts; delete c._states; delete c._fullStates;
-    return c;
-  });
-
-  DATA.companies = companies;
-  DATA.pipeline = DATA.pipeline || [];
-  DATA.actions = DATA.actions || [];
-  DATA.meta = {
-    totalMessages: rows.length,
-    mediumCounts: medCounts,
-    accountCounts: acctCounts,
-    monthlyCounts: Object.fromEntries(Object.entries(monthlyCounts).sort((a, b) => a[0].localeCompare(b[0]))),
-  };
-
-  // Clear & rebuild filters
-  activeFilters.search = ''; activeFilters.pipeline.clear(); activeFilters.status.clear(); activeFilters.state.clear(); activeFilters.ownership.clear(); activeFilters.medium.clear(); activeFilters.account.clear();
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('searchInput').value = '';
-  ['pipelineFilters', 'outreachFilters', 'ownershipFilters', 'mediumFilters', 'accountFilters'].forEach(id => document.getElementById(id).innerHTML = '');
-  buildFilters();
-  applyFilters();
-
-  showUploadStatus(`Loaded ${companies.length} companies from ${rows.length} messages!`, 'success');
-  setTimeout(closeUploadModal, 2000);
-}
-
-function showUploadStatus(msg, type) { const el = document.getElementById('uploadStatus'); el.textContent = msg; el.className = `upload-status ${type}`; }
-
-const dropZone = document.getElementById('dropZone');
-const fileInput = document.getElementById('fileInput');
-dropZone.addEventListener('click', () => fileInput.click());
-dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-dropZone.addEventListener('drop', e => {
-  e.preventDefault(); dropZone.classList.remove('dragover');
-  const file = e.dataTransfer.files[0];
-  if (file && file.name.endsWith('.csv')) readFile(file);
-  else showUploadStatus('Please upload a .csv file', 'error');
-});
-fileInput.addEventListener('change', e => { if (e.target.files[0]) readFile(e.target.files[0]); });
-function readFile(file) { const reader = new FileReader(); reader.onload = e => processUploadedCSV(e.target.result); reader.readAsText(file); }
 
 // ============================================================
 init();
