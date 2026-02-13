@@ -248,6 +248,8 @@ body::before {
 
 .custom-marker { border-radius: 50%; transition: transform 0.2s; cursor: pointer; }
 .custom-marker:hover { transform: scale(1.3); }
+.secondary-marker { opacity: 0.7; }
+.secondary-marker:hover { opacity: 1; }
 
 .ghost-marker { border-radius: 50%; cursor: pointer; animation: ghost-pulse 2s ease-in-out infinite; }
 @keyframes ghost-pulse {
@@ -973,16 +975,11 @@ const PRIORITY_COLORS = { '1 - High': { bg: 'rgba(239,68,68,0.15)', color: '#ef4
 // INIT
 // ============================================================
 async function init() {
-  try { const resp = await fetch('data.json'); DATA = await resp.json(); } catch (e) { console.error('Data load error:', e); DATA = { companies: [], pipeline: [], actions: [], meta: {} }; }
-  console.log('Data loaded:', DATA.companies.length, 'companies');
+  try { const resp = await fetch('data.json'); DATA = await resp.json(); } catch (e) { DATA = { companies: [], pipeline: [], actions: [], meta: {} }; }
   initMap();
-  console.log('Map initialized');
   buildFilters();
-  console.log('Filters built, arrow buttons:', document.querySelectorAll('.reorder-arrow').length);
   applyFilters();
-  console.log('Filters applied');
   renderPipeline();
-  console.log('Init complete');
 }
 
 // ============================================================
@@ -1164,6 +1161,52 @@ function updateMap() {
     `);
     marker.bindPopup(popup);
     marker.on('click', () => showOperatingStates(c, color));
+
+    // Add secondary dots for non-HQ operating states
+    if (c.allStates && c.allStates.includes(',')) {
+      const hqAbbr = STATE_ABBREV_JS[c.fullState] || c.state || '';
+      const states = c.allStates.split(',').map(s => s.trim()).filter(s => s);
+      states.forEach(stateName => {
+        let abbr = stateName.length > 2 ? (STATE_ABBREV_JS[stateName] || stateName) : stateName.toUpperCase();
+        if (abbr.length > 2) return; // couldn't resolve
+        if (abbr === hqAbbr) return; // skip HQ state
+        const coords = getCoords(abbr, c.name + '_' + abbr); // offset to avoid overlap
+        if (!coords[0]) return;
+
+        const secSize = Math.max(size - 2, 5);
+        const secIcon = L.divIcon({
+          className: 'custom-marker secondary-marker',
+          html: `<div style="width:${secSize}px;height:${secSize}px;background:${color}88;border-radius:50%;border:1.5px dashed rgba(255,255,255,0.5);box-shadow:0 0 ${glow}px ${color}40;transition:opacity 0.3s;opacity:${markerOpacity * 0.7};"></div>`,
+          iconSize: [secSize, secSize], iconAnchor: [secSize/2, secSize/2]
+        });
+
+        const secMarker = L.marker(coords, { icon: secIcon }).addTo(markersLayer);
+        secMarker._companyName = c.name;
+        secMarker._airtableId = c.airtableId || '';
+        secMarker._companyColor = color;
+        secMarker._isSecondary = true;
+
+        // Same popup as HQ marker
+        secMarker.bindPopup(L.popup({ className: 'custom-popup', maxWidth: 360 }).setContent(`
+          <div class="popup-content">
+            <div style="margin-bottom:10px">
+              <div class="popup-name">${c.name}</div>
+              <div style="margin-top:4px;font-size:10px;color:var(--text-muted)">📍 Operating in ${stateName} (HQ: ${c.fullState || c.state})</div>
+              <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">${ownershipBadge} ${statusBadge}</div>
+            </div>
+            ${c.address ? `<div class="popup-row"><span class="popup-label">HQ Address</span><span class="popup-val">${c.address}</span></div>` : ''}
+            <div class="popup-row"><span class="popup-label">All States</span><span class="popup-val" style="font-size:11px">${c.allStates}</span></div>
+            <div class="popup-row"><span class="popup-label">Messages Sent</span><span class="popup-val">${c.msgsSent}</span></div>
+            <div class="popup-row"><span class="popup-label">Responded</span><span class="popup-val">${c.responded ? 'Yes (' + c.respondedCount + ')' : 'No'}</span></div>
+            <div class="popup-row"><span class="popup-label">Intro Call</span><span class="popup-val">${c.scheduledIntro ? 'Scheduled' : 'No'}</span></div>
+            <div class="popup-row"><span class="popup-label">Assisted Meeting</span><span class="popup-val">${c.assistedMeeting ? 'Yes' : 'No'}</span></div>
+            ${c.pipelineStatus ? `<div class="popup-row"><span class="popup-label">Pipeline</span><span class="popup-val">${c.pipelineStatus}</span></div>` : ''}
+            ${c.website ? `<a class="popup-link" href="${c.website}" target="_blank">Visit Website &rarr;</a>` : ''}
+          </div>
+        `));
+        secMarker.on('click', () => showOperatingStates(c, color));
+      });
+    }
   });
 }
 
