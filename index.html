@@ -1164,15 +1164,17 @@ function updateMap() {
 
     // Add secondary dots for non-HQ operating states
     if (c.allStates && c.allStates.includes(',')) {
-      // Build set of states to skip (where the HQ dot already is)
-      // Use both fullState field AND address-derived state to handle mismatches
+      // Determine which state the actual HQ dot is plotted in (prefer address over fullState)
+      // Handles mismatches like Warriors Heart: fullState="Virginia" but address="Bandera, TX"
       const skipAbbrs = new Set();
-      if (c.fullState) skipAbbrs.add(STATE_ABBREV_JS[c.fullState] || '');
-      if (c.state) skipAbbrs.add(c.state.toUpperCase());
-      // Also detect state from address (e.g. "Bandera, TX 78003")
       const addrMatch = (c.address || '').match(/,\s*([A-Z]{2})\s+\d{5}/);
-      if (addrMatch) skipAbbrs.add(addrMatch[1]);
-      skipAbbrs.delete('');
+      if (addrMatch) {
+        skipAbbrs.add(addrMatch[1]);
+      } else {
+        // Fallback when address doesn't have clear state abbr
+        if (c.state) skipAbbrs.add(c.state.toUpperCase());
+        if (c.fullState) { const a = STATE_ABBREV_JS[c.fullState]; if (a) skipAbbrs.add(a); }
+      }
 
       const states = c.allStates.split(',').map(s => s.trim()).filter(s => s);
       states.forEach(stateName => {
