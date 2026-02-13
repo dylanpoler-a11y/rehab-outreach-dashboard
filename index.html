@@ -1164,12 +1164,21 @@ function updateMap() {
 
     // Add secondary dots for non-HQ operating states
     if (c.allStates && c.allStates.includes(',')) {
-      const hqAbbr = STATE_ABBREV_JS[c.fullState] || c.state || '';
+      // Build set of states to skip (where the HQ dot already is)
+      // Use both fullState field AND address-derived state to handle mismatches
+      const skipAbbrs = new Set();
+      if (c.fullState) skipAbbrs.add(STATE_ABBREV_JS[c.fullState] || '');
+      if (c.state) skipAbbrs.add(c.state.toUpperCase());
+      // Also detect state from address (e.g. "Bandera, TX 78003")
+      const addrMatch = (c.address || '').match(/,\s*([A-Z]{2})\s+\d{5}/);
+      if (addrMatch) skipAbbrs.add(addrMatch[1]);
+      skipAbbrs.delete('');
+
       const states = c.allStates.split(',').map(s => s.trim()).filter(s => s);
       states.forEach(stateName => {
         let abbr = stateName.length > 2 ? (STATE_ABBREV_JS[stateName] || stateName) : stateName.toUpperCase();
         if (abbr.length > 2) return; // couldn't resolve
-        if (abbr === hqAbbr) return; // skip HQ state
+        if (skipAbbrs.has(abbr)) return; // skip states where HQ dot already is
         const coords = getCoords(abbr, c.name + '_' + abbr); // offset to avoid overlap
         if (!coords[0]) return;
 
