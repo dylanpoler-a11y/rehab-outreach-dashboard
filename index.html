@@ -1755,8 +1755,8 @@ function initSortable() {
 
         if (targetCol === sourceCol) return;
 
-        // Check if this is a multi-card move
-        if (selectedCards.has(dealName) && selectedCards.size > 1) {
+        // Check if this is a multi-card move (only if all selected are in same column)
+        if (selectedCards.has(dealName) && selectedCards.size > 1 && selectedColumn === sourceCol) {
           const targetContainer = evt.to;
           let moveCount = 0;
 
@@ -1810,25 +1810,30 @@ function initCardSelection() {
       const dealName = card.getAttribute('data-deal-name');
       const cardColumn = card.closest('.pipeline-col-cards').getAttribute('data-status');
 
-      // Clicking a card in a different column clears previous selection
-      if (selectedColumn !== null && selectedColumn !== cardColumn) {
-        clearCardSelection();
-      }
-
-      // Toggle this card
+      // Toggle this card (allow cross-column selection for map viewing)
       if (selectedCards.has(dealName)) {
         selectedCards.delete(dealName);
         card.classList.remove('selected');
         if (selectedCards.size === 0) selectedColumn = null;
+        else recalcSelectedColumn();
       } else {
         selectedCards.add(dealName);
-        selectedColumn = cardColumn;
         card.classList.add('selected');
+        recalcSelectedColumn();
       }
 
       updateMapHighlights();
     });
   });
+}
+
+// Determine if all selected cards are in the same column (enables drag-move)
+function recalcSelectedColumn() {
+  const cols = new Set();
+  document.querySelectorAll('.pipeline-card.selected').forEach(c => {
+    cols.add(c.closest('.pipeline-col-cards').getAttribute('data-status'));
+  });
+  selectedColumn = cols.size === 1 ? [...cols][0] : null;
 }
 
 function clearCardSelection() {
