@@ -96,6 +96,16 @@ body::before {
 }
 .upload-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 20px var(--glow-blue); }
 .upload-btn svg { width: 16px; height: 16px; }
+.refresh-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 20px; background: var(--bg-glass);
+  border: 1px solid var(--border-bright); border-radius: 10px;
+  color: var(--text-secondary); font-weight: 600; font-size: 13px;
+  cursor: pointer; transition: all 0.3s; font-family: inherit;
+}
+.refresh-btn:hover { color: var(--text-primary); border-color: var(--accent-blue); background: rgba(59,130,246,0.1); transform: translateY(-1px); }
+.refresh-btn.refreshing svg { animation: spin 1s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 .live-badge {
   display: flex; align-items: center; gap: 6px;
@@ -991,6 +1001,10 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="live-dot"></div>
         <span id="companyCount">0</span> Companies &middot; <span id="messageCount">0</span> Messages
       </div>
+      <button class="refresh-btn" id="refreshBtn" onclick="refreshData()" title="Refresh data from Google Sheet">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        Refresh
+      </button>
       <button class="upload-btn" onclick="openUploadModal()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
         Upload CSV
@@ -1268,6 +1282,33 @@ async function init() {
   applyFilters();
   renderPipeline();
   initDealEditPopover();
+}
+
+async function refreshData() {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('refreshing');
+  btn.disabled = true;
+  showToast('Refreshing data...', 'pending');
+
+  try {
+    const resp = await fetch('data.json?t=' + Date.now());
+    const newData = await resp.json();
+
+    // Preserve done states (localStorage persists independently)
+    DATA = newData;
+
+    // Re-render everything
+    buildFilters();
+    applyFilters();
+    renderPipeline();
+
+    showToast('Data refreshed successfully', 'success');
+  } catch (err) {
+    showToast('Refresh failed: ' + err.message, 'error');
+  }
+
+  btn.classList.remove('refreshing');
+  btn.disabled = false;
 }
 
 // ============================================================
