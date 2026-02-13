@@ -2080,6 +2080,7 @@ function renderPipeline() {
 // ACTION ITEMS SYSTEM
 // ============================================================
 let actionDoneSet = new Set(); // indices of completed actions
+const actionPrevStatusMap = new Map(); // idx -> previous status before marking done
 let actionShowDone = false;
 
 function matchesDeal(dealName, facility) {
@@ -2115,6 +2116,23 @@ function initActionItems() {
     const saved = localStorage.getItem('actionDoneSet');
     if (saved) actionDoneSet = new Set(JSON.parse(saved));
   } catch(e) {}
+  // Load previous status map and apply Done status to done items
+  try {
+    const savedMap = localStorage.getItem('actionPrevStatusMap');
+    if (savedMap) {
+      const entries = JSON.parse(savedMap);
+      entries.forEach(([k, v]) => actionPrevStatusMap.set(k, v));
+    }
+  } catch(e) {}
+  // Ensure all done items have status "Done" in memory
+  actionDoneSet.forEach(idx => {
+    if (DATA.actions[idx] && DATA.actions[idx].status !== 'Done') {
+      if (!actionPrevStatusMap.has(idx)) {
+        actionPrevStatusMap.set(idx, DATA.actions[idx].status || 'Pending');
+      }
+      DATA.actions[idx].status = 'Done';
+    }
+  });
 
   // Populate owner filter from data
   const ownerSelect = document.getElementById('actionFilterOwner');
@@ -2256,20 +2274,31 @@ function renderActionItems() {
 
       if (isDone) {
         actionDoneSet.add(idx);
+        // Save previous status and set to Done
+        if (DATA.actions[idx].status && DATA.actions[idx].status !== 'Done') {
+          actionPrevStatusMap.set(idx, DATA.actions[idx].status);
+        }
+        DATA.actions[idx].status = 'Done';
         row.classList.add('done');
         if (!actionShowDone) {
           row.classList.add('hiding');
           setTimeout(() => { renderActionItems(); refreshPipelineCardActions(); }, 350);
           writeActionDoneToSheet(DATA.actions[idx], true);
           try { localStorage.setItem('actionDoneSet', JSON.stringify([...actionDoneSet])); } catch(e) {}
+          try { localStorage.setItem('actionPrevStatusMap', JSON.stringify([...actionPrevStatusMap])); } catch(e) {}
           return;
         }
       } else {
         actionDoneSet.delete(idx);
+        // Restore previous status
+        const prevStatus = actionPrevStatusMap.get(idx) || 'Pending';
+        DATA.actions[idx].status = prevStatus;
+        actionPrevStatusMap.delete(idx);
         row.classList.remove('done');
       }
       // Save to localStorage + sheet
       try { localStorage.setItem('actionDoneSet', JSON.stringify([...actionDoneSet])); } catch(e) {}
+      try { localStorage.setItem('actionPrevStatusMap', JSON.stringify([...actionPrevStatusMap])); } catch(e) {}
       writeActionDoneToSheet(DATA.actions[idx], isDone);
       renderActionItems();
       refreshPipelineCardActions();
@@ -3138,14 +3167,24 @@ function openDealEditPopover(dealName, cardElement) {
       const isDone = !actionDoneSet.has(idx);
       if (isDone) {
         actionDoneSet.add(idx);
+        // Save previous status and set to Done
+        if (DATA.actions[idx].status && DATA.actions[idx].status !== 'Done') {
+          actionPrevStatusMap.set(idx, DATA.actions[idx].status);
+        }
+        DATA.actions[idx].status = 'Done';
         this.classList.add('checked');
         item.classList.add('is-done');
       } else {
         actionDoneSet.delete(idx);
+        // Restore previous status
+        const prevStatus = actionPrevStatusMap.get(idx) || 'Pending';
+        DATA.actions[idx].status = prevStatus;
+        actionPrevStatusMap.delete(idx);
         this.classList.remove('checked');
         item.classList.remove('is-done');
       }
       try { localStorage.setItem('actionDoneSet', JSON.stringify([...actionDoneSet])); } catch(e) {}
+      try { localStorage.setItem('actionPrevStatusMap', JSON.stringify([...actionPrevStatusMap])); } catch(e) {}
       writeActionDoneToSheet(DATA.actions[idx], isDone);
       // Update the pending count label
       const label = container.querySelector('.deal-edit-label span');
