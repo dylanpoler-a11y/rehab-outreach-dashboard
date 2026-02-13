@@ -1401,8 +1401,8 @@ function buildFilters() {
   renderFilterGroup('outreachFilters', statuses, 'status', companies);
 
   // Ownership — prepend Bradford filters (Facility + OP Office)
-  const bradfordFacilityFilter = { key: 'bradford_facility', label: '⭐ Bradford Facility', color: '#fbbf24', fn: c => c.bradfordFacility === 'Bradford Facility' };
-  const bradfordOPFilter = { key: 'bradford_op', label: '⭐ Bradford OP Office', color: '#a855f7', fn: c => c.bradfordFacility === 'Bradford OP Office' };
+  const bradfordFacilityFilter = { key: 'bradford_facility', label: 'Bradford Facility', color: '#fbbf24', fn: c => c.bradfordFacility === 'Bradford Facility', starIcon: true };
+  const bradfordOPFilter = { key: 'bradford_op', label: 'Bradford OP Office', color: '#a855f7', fn: c => c.bradfordFacility === 'Bradford OP Office', starIcon: true };
   const ownerships = [
     ...(companies.some(bradfordFacilityFilter.fn) ? [bradfordFacilityFilter] : []),
     ...(companies.some(bradfordOPFilter.fn) ? [bradfordOPFilter] : []),
@@ -1442,7 +1442,10 @@ function renderFilterGroup(containerId, items, filterType, companies) {
     btn.dataset.filterType = filterType;
     btn.dataset.filterKey = item.key;
     btn.dataset.filterColor = item.color;
-    btn.innerHTML = `<span class="filter-dot" style="background:${item.color}"></span>${item.label}<span class="filter-count">${count}</span>`;
+    const bullet = item.starIcon
+      ? `<svg viewBox="0 0 24 24" width="10" height="10" style="flex-shrink:0"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" fill="${item.color}" stroke="rgba(255,255,255,0.7)" stroke-width="1.5" stroke-linejoin="round"/></svg>`
+      : `<span class="filter-dot" style="background:${item.color}"></span>`;
+    btn.innerHTML = `${bullet}${item.label}<span class="filter-count">${count}</span>`;
     btn.addEventListener('click', () => {
       if (activeFilters[filterType].has(item.key)) {
         activeFilters[filterType].delete(item.key);
