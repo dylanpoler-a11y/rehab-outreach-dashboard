@@ -428,10 +428,10 @@ body::before {
 }
 
 /* Map highlight pulse for selected companies */
-.highlight-marker { border-radius: 50%; animation: highlight-pulse 1.5s ease-in-out infinite; }
+.highlight-marker { border-radius: 50%; animation: highlight-pulse 2s ease-in-out infinite; pointer-events: none; }
 @keyframes highlight-pulse {
-  0%, 100% { opacity: 0.85; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.35); }
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.15); }
 }
 .highlight-tooltip {
   background: rgba(6, 182, 212, 0.9) !important; border: none !important;
@@ -1970,11 +1970,11 @@ function updateMapHighlights() {
     const highlightIcon = L.divIcon({
       className: 'highlight-marker',
       html: `<div style="
-        width:28px;height:28px;border:3px solid ${color};border-radius:50%;
-        box-shadow:0 0 20px ${color}88, 0 0 40px ${color}44;
-        background:${color}22;
+        width:22px;height:22px;border:2px solid ${color};border-radius:50%;
+        box-shadow:0 0 12px ${color}88, 0 0 24px ${color}33;
+        background:${color}11;
       "></div>`,
-      iconSize: [28, 28], iconAnchor: [14, 14]
+      iconSize: [22, 22], iconAnchor: [11, 11]
     });
 
     const hlMarker = L.marker([company.lat, company.lng], { icon: highlightIcon }).addTo(highlightLayer);
