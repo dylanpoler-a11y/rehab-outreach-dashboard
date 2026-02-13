@@ -742,6 +742,12 @@ body::before {
 .action-show-done.active { border-color: rgba(16,185,129,0.3); color: #10b981; background: rgba(16,185,129,0.08); }
 .action-show-done-check { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--border-bright); display: flex; align-items: center; justify-content: center; font-size: 10px; transition: all 0.2s; }
 .action-show-done.active .action-show-done-check { background: #10b981; border-color: #10b981; color: #0a0e1a; }
+.action-new-btn {
+  padding: 5px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+  cursor: pointer; border: 1px solid rgba(59,130,246,0.3); background: rgba(59,130,246,0.1);
+  color: var(--accent-blue); font-family: inherit; transition: all 0.2s; white-space: nowrap;
+}
+.action-new-btn:hover { background: rgba(59,130,246,0.2); border-color: rgba(59,130,246,0.5); }
 
 /* Action Items Grid + Column Header */
 .action-items-grid { display: grid; gap: 6px; }
@@ -1093,6 +1099,8 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="action-show-done" id="actionShowDone" title="Show completed items">
               <span class="action-show-done-check">&#10003;</span> Show Done
             </div>
+            <div class="action-toolbar-sep"></div>
+            <button class="action-new-btn" id="actionNewBtn" title="Create new action item">+ New</button>
           </div>
           <div class="action-items-grid" id="actionItemsGrid"></div>
         </div>
@@ -2090,6 +2098,12 @@ function initActionItems() {
       renderActionItems();
     });
   }
+
+  // New action item button
+  const newBtn = document.getElementById('actionNewBtn');
+  if (newBtn) {
+    newBtn.addEventListener('click', () => openCreateActionPopover(null, newBtn));
+  }
 }
 
 function renderActionItems() {
@@ -2405,6 +2419,171 @@ async function saveActionEdits() {
   editingActionIdx = null;
   renderActionItems();
   refreshPipelineCardActions();
+}
+
+function openCreateActionPopover(prefillFacility, anchorEl) {
+  editingAction = null;
+  editingActionIdx = null;
+  editActionFormValues = {};
+
+  document.getElementById('dealEditTitle').textContent = 'New Action Item';
+
+  const container = document.getElementById('dealEditFields');
+  container.innerHTML = ACTION_EDIT_FIELDS.map(field => {
+    const currentVal = field.key === 'facility' && prefillFacility ? prefillFacility
+      : field.key === 'priority' ? 'MEDIUM'
+      : field.key === 'status' ? 'Not Started' : '';
+    editActionFormValues[field.key] = currentVal;
+
+    if (field.type === 'single-select') {
+      const chips = field.options.map(opt => {
+        const isSelected = currentVal === opt;
+        const cls = field.chipClass ? field.chipClass(opt) : '';
+        return `<button class="deal-edit-chip ${cls} ${isSelected ? 'selected' : ''}" data-field="${field.key}" data-value="${opt}">${opt}</button>`;
+      }).join('');
+      return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div><div class="deal-edit-chips" data-field="${field.key}" data-mode="single">${chips}</div></div>`;
+    }
+
+    if (field.type === 'textarea') {
+      return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div><textarea class="deal-edit-input deal-edit-textarea" data-field="${field.key}">${currentVal}</textarea></div>`;
+    }
+
+    if (field.type === 'search-select') {
+      const fieldId = `search-select-${field.key}`;
+      return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div>
+        <div class="search-select-wrapper" data-field="${field.key}">
+          <input class="deal-edit-input search-select-input" type="text" data-field="${field.key}" id="${fieldId}"
+            value="${currentVal.replace(/"/g, '&quot;')}" placeholder="Search pipeline deals..." autocomplete="off">
+          <div class="search-select-dropdown" id="${fieldId}-dropdown"></div>
+        </div></div>`;
+    }
+
+    return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div><input class="deal-edit-input" type="text" data-field="${field.key}" value="${currentVal.replace(/"/g, '&quot;')}"></div>`;
+  }).join('');
+
+  // Wire chips
+  container.querySelectorAll('.deal-edit-chip').forEach(chip => {
+    chip.addEventListener('click', function() {
+      const fieldKey = this.dataset.field;
+      this.closest('.deal-edit-chips').querySelectorAll('.deal-edit-chip').forEach(c => c.classList.remove('selected'));
+      this.classList.add('selected');
+      editActionFormValues[fieldKey] = this.dataset.value;
+    });
+  });
+
+  // Wire text inputs (exclude search-select)
+  container.querySelectorAll('.deal-edit-input:not(.search-select-input)').forEach(input => {
+    input.addEventListener('input', function() {
+      editActionFormValues[this.dataset.field] = this.value;
+    });
+  });
+
+  // Wire search-select inputs
+  container.querySelectorAll('.search-select-input').forEach(input => {
+    const fieldKey = input.dataset.field;
+    const dropdown = input.nextElementSibling;
+    const fieldDef = ACTION_EDIT_FIELDS.find(f => f.key === fieldKey);
+    const allOptions = fieldDef && fieldDef.optionsFn ? fieldDef.optionsFn() : [];
+
+    function highlightMatch(text, query) {
+      if (!query) return text;
+      const idx = text.toLowerCase().indexOf(query);
+      if (idx === -1) return text;
+      return text.substring(0, idx) + '<strong>' + text.substring(idx, idx + query.length) + '</strong>' + text.substring(idx + query.length);
+    }
+
+    function showDropdown(filter) {
+      const query = (filter || '').toLowerCase();
+      const matches = query ? allOptions.filter(opt => opt.toLowerCase().includes(query)) : allOptions;
+      if (matches.length === 0) {
+        dropdown.innerHTML = '<div class="search-select-no-results">No matching deals</div>';
+      } else {
+        dropdown.innerHTML = matches.map(opt =>
+          `<div class="search-select-option" data-value="${opt.replace(/"/g, '&quot;')}">${highlightMatch(opt, query)}</div>`
+        ).join('');
+      }
+      dropdown.classList.add('visible');
+    }
+
+    function hideDropdown() { setTimeout(() => dropdown.classList.remove('visible'), 150); }
+
+    input.addEventListener('focus', () => showDropdown(input.value));
+    input.addEventListener('input', function() {
+      editActionFormValues[fieldKey] = this.value;
+      showDropdown(this.value);
+    });
+    input.addEventListener('blur', hideDropdown);
+
+    dropdown.addEventListener('mousedown', function(e) {
+      const option = e.target.closest('.search-select-option');
+      if (option) {
+        const val = option.dataset.value;
+        input.value = val;
+        editActionFormValues[fieldKey] = val;
+        dropdown.classList.remove('visible');
+      }
+    });
+  });
+
+  // Swap save handler to saveNewAction
+  const saveBtn = document.getElementById('dealEditSave');
+  const newSave = saveBtn.cloneNode(true);
+  saveBtn.parentNode.replaceChild(newSave, saveBtn);
+  newSave.textContent = 'Create Action';
+  newSave.addEventListener('click', saveNewAction);
+
+  const anchor = anchorEl || document.getElementById('actionNewBtn');
+  positionPopover(anchor);
+  document.getElementById('dealEditPopover').classList.add('open');
+  document.getElementById('dealEditBackdrop').classList.add('open');
+}
+
+async function saveNewAction() {
+  const saveBtn = document.getElementById('dealEditSave');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Creating...';
+
+  // Require at least an action description
+  if (!editActionFormValues.action || !editActionFormValues.action.trim()) {
+    showToast('Action item description is required', 'pending');
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Create Action';
+    return;
+  }
+
+  // Build new action object
+  const newAction = {};
+  ACTION_EDIT_FIELDS.forEach(field => {
+    newAction[field.key] = editActionFormValues[field.key] || '';
+  });
+
+  // Add to in-memory data
+  DATA.actions.push(newAction);
+
+  // Write to Google Sheet
+  writeNewActionToSheet(newAction);
+
+  showToast('Action item created', 'success');
+  saveBtn.disabled = false;
+  saveBtn.textContent = 'Create Action';
+  closeDealEditPopover();
+  editingAction = null;
+  editingActionIdx = null;
+  renderActionItems();
+  refreshPipelineCardActions();
+}
+
+async function writeNewActionToSheet(action) {
+  if (!APPS_SCRIPT_URL) return;
+  try {
+    await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ newAction: action })
+    });
+  } catch (err) {
+    console.warn('New action write-back error:', err.message);
+  }
 }
 
 async function writeActionFieldsToSheet(action, changes) {
@@ -2856,6 +3035,7 @@ function openDealEditPopover(dealName, cardElement) {
       } else {
         html += '<div class="linked-actions-empty">No action items linked to this deal</div>';
       }
+      html += `<button class="action-new-btn linked-action-new-btn" id="linkedActionNewBtn" style="margin-top:8px;width:100%">+ New Action Item</button>`;
       // Keep fallback manual field
       html += `<div class="linked-actions-fallback"><div class="deal-edit-label">Manual Next Action</div><textarea class="deal-edit-input deal-edit-textarea" data-field="nextAction" style="min-height:40px;font-size:11px">${currentVal}</textarea></div>`;
       html += '</div>';
@@ -2924,16 +3104,28 @@ function openDealEditPopover(dealName, cardElement) {
       const idx = parseInt(this.dataset.idx);
       const action = DATA.actions[idx];
       if (!action) return;
-      // Close deal popover, open action edit popover
       const cardEl = editingCardEl;
       const dealRef = editingDeal;
       closeDealEditPopover();
-      // Small delay to let close animation finish
       setTimeout(() => {
         openActionEditPopover(action, idx, cardEl || document.querySelector(`.pipeline-card[data-deal-name="${dealRef.name}"]`));
       }, 100);
     });
   });
+
+  // Wire "New Action Item" button inside deal popover
+  const linkedNewBtn = document.getElementById('linkedActionNewBtn');
+  if (linkedNewBtn) {
+    linkedNewBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const dealName = deal.name;
+      const cardEl = editingCardEl;
+      closeDealEditPopover();
+      setTimeout(() => {
+        openCreateActionPopover(dealName, cardEl || document.querySelector(`.pipeline-card[data-deal-name="${dealName}"]`));
+      }, 100);
+    });
+  }
 
   positionPopover(cardElement);
   document.getElementById('dealEditPopover').classList.add('open');
