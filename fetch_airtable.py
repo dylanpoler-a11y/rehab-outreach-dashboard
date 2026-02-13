@@ -253,7 +253,7 @@ def main():
     companies_raw = airtable_fetch_all('Companies', [
         'Name', 'HQ Address', 'Full HQ State Name', 'HQ State', 'Ownership',
         'All State(s) Operating In', 'Override', 'Website', 'State Tier',
-        'State Tier Categories',
+        'State Tier Categories', 'Bradford Facility',
     ])
     print(f"    {len(companies_raw)} companies")
 
@@ -312,6 +312,7 @@ def main():
         override = bool(f.get('Override'))
         state_tier_raw = at_val(f, 'State Tier', '')
         state_tier = state_tier_raw.strip() if isinstance(state_tier_raw, str) else ''
+        bradford_facility = bool(f.get('Bradford Facility'))
 
         company_by_id[r['id']] = {
             'name': name,
@@ -324,6 +325,7 @@ def main():
             'website': website,
             'override': override,
             'stateTier': state_tier,
+            'bradfordFacility': bradford_facility,
         }
 
     # Contact record ID -> list of company record IDs
@@ -672,6 +674,7 @@ def main():
             'website': comp['website'],
             'allStates': comp['allStates'],
             'stateTier': comp['stateTier'],
+            'bradfordFacility': comp.get('bradfordFacility', False),
             'msgsSent': agg['msgsSent'],
             'byMedium': dict(agg['byMedium']) if isinstance(agg['byMedium'], defaultdict) else agg['byMedium'],
             'byAccount': dict(agg['byAccount']) if isinstance(agg['byAccount'], defaultdict) else agg['byAccount'],
