@@ -312,7 +312,8 @@ def main():
         override = bool(f.get('Override'))
         state_tier_raw = at_val(f, 'State Tier', '')
         state_tier = state_tier_raw.strip() if isinstance(state_tier_raw, str) else ''
-        bradford_facility = bool(f.get('Bradford Facility'))
+        bradford_raw = at_val(f, 'Bradford Facility', '')
+        bradford_facility = bradford_raw.strip() if isinstance(bradford_raw, str) else ''
 
         company_by_id[r['id']] = {
             'name': name,
