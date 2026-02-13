@@ -566,6 +566,25 @@ body::before {
 .deal-edit-chip.chip-stand-by.selected { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.3); color: var(--accent-orange); }
 .deal-edit-chip.chip-stalled.selected { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: var(--accent-red); }
 .deal-edit-chip.chip-due-diligence.selected { background: rgba(139,92,246,0.1); border-color: rgba(139,92,246,0.3); color: var(--accent-purple); }
+/* Search-select dropdown */
+.search-select-wrapper { position: relative; }
+.search-select-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0; max-height: 200px;
+  overflow-y: auto; background: var(--bg-secondary); border: 1px solid var(--border-bright);
+  border-top: none; border-radius: 0 0 8px 8px; z-index: 1600; display: none;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.search-select-dropdown.visible { display: block; }
+.search-select-dropdown::-webkit-scrollbar { width: 6px; }
+.search-select-dropdown::-webkit-scrollbar-track { background: transparent; }
+.search-select-dropdown::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+.search-select-option {
+  padding: 8px 12px; font-size: 13px; color: var(--text-secondary);
+  cursor: pointer; transition: background 0.1s;
+}
+.search-select-option:hover { background: rgba(59,130,246,0.1); color: var(--text-primary); }
+.search-select-option strong { color: var(--accent-blue); font-weight: 700; }
+.search-select-no-results { padding: 12px; font-size: 12px; color: var(--text-muted); text-align: center; font-style: italic; }
 .deal-edit-actions {
   display: flex; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border);
 }
@@ -1938,7 +1957,7 @@ function renderPipeline() {
                 <div class="pipeline-card-detail"><strong>${d.states || '—'}</strong> · ${d.type || 'TBD'}</div>
                 ${d.keyContact ? `<div class="pipeline-card-detail">👤 ${d.keyContact}</div>` : ''}
                 ${d.ebitda && d.ebitda !== 'TBD' ? `<div class="pipeline-card-detail" style="color:var(--accent-green)">💰 ${d.ebitda}</div>` : ''}
-                ${d.nextAction ? `<div class="pipeline-card-detail" style="color:var(--text-secondary);margin-top:4px">→ ${d.nextAction.substring(0, 100)}${d.nextAction.length > 100 ? '...' : ''}</div>` : ''}
+                ${(() => { const la = getNextActionForDeal(d.name); if (la) { const pc2 = la.priority === 'URGENT' ? 'var(--accent-red)' : la.priority === 'HIGH' ? 'var(--accent-orange)' : 'var(--text-secondary)'; const at = la.action.substring(0,100) + (la.action.length > 100 ? '...' : ''); return `<div class="pipeline-card-detail" style="color:${pc2};margin-top:4px">→ ${at}</div>`; } return d.nextAction ? `<div class="pipeline-card-detail" style="color:var(--text-secondary);margin-top:4px">→ ${d.nextAction.substring(0,100)}${d.nextAction.length > 100 ? '...' : ''}</div>` : ''; })()}
                 <div class="pipeline-card-badges">
                   <span class="pipeline-card-priority" style="background:${pc.bg};color:${pc.color}">${d.priority || '—'}</span>
                   ${d.status !== col.key ? `<span class="pipeline-card-priority" style="background:${col.bg};color:${col.color}">${d.status}</span>` : ''}
@@ -1971,6 +1990,22 @@ function renderPipeline() {
 // ============================================================
 let actionDoneSet = new Set(); // indices of completed actions
 let actionShowDone = false;
+
+function getNextActionForDeal(dealName) {
+  if (!DATA.actions || DATA.actions.length === 0) return null;
+  const priorityOrder = { 'URGENT': 0, 'HIGH': 1, 'MEDIUM': 2, 'LOW': 3 };
+  const dealLower = dealName.toLowerCase();
+  const candidates = DATA.actions
+    .map((a, i) => ({ ...a, _idx: i }))
+    .filter(a => {
+      if (actionDoneSet.has(a._idx)) return false;
+      const facLower = (a.facility || '').toLowerCase();
+      if (!facLower) return false;
+      return dealLower === facLower || dealLower.includes(facLower) || facLower.includes(dealLower);
+    })
+    .sort((a, b) => (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9));
+  return candidates.length > 0 ? candidates[0] : null;
+}
 
 function initActionItems() {
   // Load done state from localStorage
@@ -2119,13 +2154,14 @@ function renderActionItems() {
         if (!actionShowDone) {
           // Animate out then re-render
           row.classList.add('hiding');
-          setTimeout(() => renderActionItems(), 350);
+          setTimeout(() => { renderActionItems(); refreshPipelineCardActions(); }, 350);
           return;
         }
       }
       // Save to localStorage
       try { localStorage.setItem('actionDoneSet', JSON.stringify([...actionDoneSet])); } catch(e) {}
       renderActionItems();
+      refreshPipelineCardActions();
     });
   });
 
@@ -2148,7 +2184,8 @@ const ACTION_EDIT_FIELDS = [
     options: ['URGENT', 'HIGH', 'MEDIUM', 'LOW'],
     chipClass: k => k === 'URGENT' ? 'chip-high' : k === 'HIGH' ? 'chip-medium' : k === 'MEDIUM' ? 'chip-sent' : 'chip-low' },
   { key: 'action', label: 'Action Item', type: 'textarea' },
-  { key: 'facility', label: 'Facility', type: 'text' },
+  { key: 'facility', label: 'Facility', type: 'search-select',
+    optionsFn: () => DATA.pipeline.map(d => d.name).sort() },
   { key: 'owner', label: 'Owner', type: 'text' },
   { key: 'deadline', label: 'Deadline', type: 'text' },
   { key: 'status', label: 'Status', type: 'single-select',
@@ -2186,6 +2223,16 @@ function openActionEditPopover(action, idx, rowEl) {
       return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div><textarea class="deal-edit-input deal-edit-textarea" data-field="${field.key}">${currentVal}</textarea></div>`;
     }
 
+    if (field.type === 'search-select') {
+      const fieldId = `search-select-${field.key}`;
+      return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div>
+        <div class="search-select-wrapper" data-field="${field.key}">
+          <input class="deal-edit-input search-select-input" type="text" data-field="${field.key}" id="${fieldId}"
+            value="${currentVal.replace(/"/g, '&quot;')}" placeholder="Search pipeline deals..." autocomplete="off">
+          <div class="search-select-dropdown" id="${fieldId}-dropdown"></div>
+        </div></div>`;
+    }
+
     return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div><input class="deal-edit-input" type="text" data-field="${field.key}" value="${currentVal.replace(/"/g, '&quot;')}"></div>`;
   }).join('');
 
@@ -2199,10 +2246,59 @@ function openActionEditPopover(action, idx, rowEl) {
     });
   });
 
-  // Wire text inputs
-  container.querySelectorAll('.deal-edit-input').forEach(input => {
+  // Wire text inputs (exclude search-select inputs - they have their own handler)
+  container.querySelectorAll('.deal-edit-input:not(.search-select-input)').forEach(input => {
     input.addEventListener('input', function() {
       editActionFormValues[this.dataset.field] = this.value;
+    });
+  });
+
+  // Wire search-select inputs
+  container.querySelectorAll('.search-select-input').forEach(input => {
+    const fieldKey = input.dataset.field;
+    const dropdown = input.nextElementSibling;
+    const fieldDef = ACTION_EDIT_FIELDS.find(f => f.key === fieldKey);
+    const allOptions = fieldDef && fieldDef.optionsFn ? fieldDef.optionsFn() : [];
+
+    function highlightMatch(text, query) {
+      if (!query) return text;
+      const idx = text.toLowerCase().indexOf(query);
+      if (idx === -1) return text;
+      return text.substring(0, idx) + '<strong>' + text.substring(idx, idx + query.length) + '</strong>' + text.substring(idx + query.length);
+    }
+
+    function showDropdown(filter) {
+      const query = (filter || '').toLowerCase();
+      const matches = query ? allOptions.filter(opt => opt.toLowerCase().includes(query)) : allOptions;
+      if (matches.length === 0) {
+        dropdown.innerHTML = '<div class="search-select-no-results">No matching deals</div>';
+      } else {
+        dropdown.innerHTML = matches.map(opt =>
+          `<div class="search-select-option" data-value="${opt.replace(/"/g, '&quot;')}">${highlightMatch(opt, query)}</div>`
+        ).join('');
+      }
+      dropdown.classList.add('visible');
+    }
+
+    function hideDropdown() {
+      setTimeout(() => dropdown.classList.remove('visible'), 150);
+    }
+
+    input.addEventListener('focus', () => showDropdown(input.value));
+    input.addEventListener('input', function() {
+      editActionFormValues[fieldKey] = this.value;
+      showDropdown(this.value);
+    });
+    input.addEventListener('blur', hideDropdown);
+
+    dropdown.addEventListener('mousedown', function(e) {
+      const option = e.target.closest('.search-select-option');
+      if (option) {
+        const val = option.dataset.value;
+        input.value = val;
+        editActionFormValues[fieldKey] = val;
+        dropdown.classList.remove('visible');
+      }
     });
   });
 
@@ -2255,6 +2351,7 @@ async function saveActionEdits() {
   editingAction = null;
   editingActionIdx = null;
   renderActionItems();
+  refreshPipelineCardActions();
 }
 
 async function writeActionFieldsToSheet(action, changes) {
@@ -2822,7 +2919,7 @@ function updateCardContent(cardEl, deal) {
     <div class="pipeline-card-detail"><strong>${deal.states || '\u2014'}</strong> \u00b7 ${deal.type || 'TBD'}</div>
     ${deal.keyContact ? `<div class="pipeline-card-detail">\ud83d\udc64 ${deal.keyContact}</div>` : ''}
     ${deal.ebitda && deal.ebitda !== 'TBD' ? `<div class="pipeline-card-detail" style="color:var(--accent-green)">\ud83d\udcb0 ${deal.ebitda}</div>` : ''}
-    ${deal.nextAction ? `<div class="pipeline-card-detail" style="color:var(--text-secondary);margin-top:4px">\u2192 ${deal.nextAction.substring(0, 100)}${deal.nextAction.length > 100 ? '...' : ''}</div>` : ''}
+    ${(() => { const la = getNextActionForDeal(deal.name); if (la) { const pc2 = la.priority === 'URGENT' ? 'var(--accent-red)' : la.priority === 'HIGH' ? 'var(--accent-orange)' : 'var(--text-secondary)'; const at = la.action.substring(0,100) + (la.action.length > 100 ? '...' : ''); return `<div class="pipeline-card-detail" style="color:${pc2};margin-top:4px">\u2192 ${at}</div>`; } return deal.nextAction ? `<div class="pipeline-card-detail" style="color:var(--text-secondary);margin-top:4px">\u2192 ${deal.nextAction.substring(0,100)}${deal.nextAction.length > 100 ? '...' : ''}</div>` : ''; })()}
     <div class="pipeline-card-badges">
       <span class="pipeline-card-priority" style="background:${pc.bg};color:${pc.color}">${deal.priority || '\u2014'}</span>
       ${deal.status !== col.key ? `<span class="pipeline-card-priority" style="background:${col.bg};color:${col.color}">${deal.status}</span>` : ''}
@@ -2835,6 +2932,14 @@ function updateCardContent(cardEl, deal) {
   `;
 
   wireEditButton(cardEl);
+}
+
+function refreshPipelineCardActions() {
+  document.querySelectorAll('.pipeline-card').forEach(cardEl => {
+    const dealName = cardEl.getAttribute('data-deal-name');
+    const deal = DATA.pipeline.find(d => d.name === dealName);
+    if (deal) updateCardContent(cardEl, deal);
+  });
 }
 
 async function writeDealFieldsToSheet(dealName, changes) {
