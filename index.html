@@ -642,8 +642,6 @@ body::before {
   font-style: italic; background: var(--bg-glass); border-radius: 8px;
   border: 1px dashed var(--border);
 }
-.linked-actions-fallback { margin-top: 8px; }
-.linked-actions-fallback .deal-edit-label { font-size: 9px; margin-bottom: 4px; opacity: 0.6; }
 .deal-edit-actions {
   display: flex; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border);
 }
@@ -2053,7 +2051,7 @@ function renderPipeline() {
                 <div class="pipeline-card-detail"><strong>${d.states || '—'}</strong> · ${d.type || 'TBD'}</div>
                 ${d.keyContact ? `<div class="pipeline-card-detail">👤 ${d.keyContact}</div>` : ''}
                 ${d.ebitda && d.ebitda !== 'TBD' ? `<div class="pipeline-card-detail" style="color:var(--accent-green)">💰 ${d.ebitda}</div>` : ''}
-                ${(() => { const la = getNextActionForDeal(d.name); if (la) { const pc2 = la.priority === 'URGENT' ? 'var(--accent-red)' : la.priority === 'HIGH' ? 'var(--accent-orange)' : 'var(--text-secondary)'; const at = la.action.substring(0,100) + (la.action.length > 100 ? '...' : ''); return `<div class="pipeline-card-detail" style="color:${pc2};margin-top:4px">→ ${at}</div>`; } return d.nextAction ? `<div class="pipeline-card-detail" style="color:var(--text-secondary);margin-top:4px">→ ${d.nextAction.substring(0,100)}${d.nextAction.length > 100 ? '...' : ''}</div>` : ''; })()}
+                ${(() => { const la = getNextActionForDeal(d.name); if (la) { const pc2 = la.priority === 'URGENT' ? 'var(--accent-red)' : la.priority === 'HIGH' ? 'var(--accent-orange)' : 'var(--text-secondary)'; const at = la.action.substring(0,100) + (la.action.length > 100 ? '...' : ''); return `<div class="pipeline-card-detail" style="color:${pc2};margin-top:4px">→ ${at}</div>`; } return ''; })()}
                 <div class="pipeline-card-badges">
                   <span class="pipeline-card-priority" style="background:${pc.bg};color:${pc.color}">${d.priority || '—'}</span>
                   ${d.status !== col.key ? `<span class="pipeline-card-priority" style="background:${col.bg};color:${col.color}">${d.status}</span>` : ''}
@@ -2075,6 +2073,9 @@ function renderPipeline() {
   initSortable();
   initCardSelection();
   wireAllEditButtons();
+
+  // Migrate manual nextAction text into proper action items
+  migrateManualNextActions();
 
   // Initialize action items system
   initActionItems();
@@ -2140,6 +2141,66 @@ function getNextActionForDeal(dealName) {
   const all = getAllActionsForDeal(dealName);
   const pending = all.filter(a => !actionDoneSet.has(a._idx));
   return pending.length > 0 ? pending[0] : null;
+}
+
+// ============================================================
+// MIGRATE: Convert manual nextAction text → proper action items
+// Runs once on init. Checks localStorage to avoid duplicating.
+// ============================================================
+function migrateManualNextActions() {
+  if (!DATA.pipeline || !DATA.actions) return;
+
+  // Track which deals already have linked action items
+  const dealsWithActions = new Set();
+  DATA.actions.forEach(a => {
+    DATA.pipeline.forEach(d => {
+      if (matchesDeal(d.name, a.facility)) dealsWithActions.add(d.name);
+    });
+  });
+
+  // Check localStorage for already-migrated deals
+  let migratedDeals = new Set();
+  try {
+    const saved = localStorage.getItem('migratedNextActions');
+    if (saved) migratedDeals = new Set(JSON.parse(saved));
+  } catch(e) {}
+
+  const toMigrate = [];
+  DATA.pipeline.forEach(d => {
+    if (!d.nextAction || !d.nextAction.trim()) return;
+    if (dealsWithActions.has(d.name)) return; // already has action items
+    if (migratedDeals.has(d.name)) return; // already migrated previously
+
+    toMigrate.push(d);
+  });
+
+  if (toMigrate.length === 0) return;
+
+  console.log(`Migrating ${toMigrate.length} manual nextActions to action items...`);
+
+  toMigrate.forEach(d => {
+    const newAction = {
+      priority: 'MEDIUM',
+      action: d.nextAction.trim(),
+      facility: d.name,
+      owner: d.actionOwner || '',
+      deadline: d.deadline || '',
+      status: 'Pending',
+      notes: '',
+      pipelineStatus: d.status || '',
+    };
+
+    DATA.actions.push(newAction);
+    migratedDeals.add(d.name);
+
+    // Write to Google Sheet
+    writeNewActionToSheet(newAction);
+  });
+
+  // Save migrated set to localStorage so we don't re-migrate on reload
+  try { localStorage.setItem('migratedNextActions', JSON.stringify([...migratedDeals])); } catch(e) {}
+
+  console.log(`Migrated ${toMigrate.length} action items successfully`);
 }
 
 function initActionItems() {
@@ -3278,8 +3339,6 @@ function openDealEditPopover(dealName, cardElement) {
         html += '<div class="linked-actions-empty">No action items linked to this deal</div>';
       }
       html += `<button class="action-new-btn linked-action-new-btn" id="linkedActionNewBtn" style="margin-top:8px;width:100%">+ New Action Item</button>`;
-      // Keep fallback manual field
-      html += `<div class="linked-actions-fallback"><div class="deal-edit-label">Manual Next Action</div><textarea class="deal-edit-input deal-edit-textarea" data-field="nextAction" style="min-height:40px;font-size:11px">${currentVal}</textarea></div>`;
       html += '</div>';
       return html;
     }
@@ -3504,7 +3563,7 @@ function updateCardContent(cardEl, deal) {
     <div class="pipeline-card-detail"><strong>${deal.states || '\u2014'}</strong> \u00b7 ${deal.type || 'TBD'}</div>
     ${deal.keyContact ? `<div class="pipeline-card-detail">\ud83d\udc64 ${deal.keyContact}</div>` : ''}
     ${deal.ebitda && deal.ebitda !== 'TBD' ? `<div class="pipeline-card-detail" style="color:var(--accent-green)">\ud83d\udcb0 ${deal.ebitda}</div>` : ''}
-    ${(() => { const la = getNextActionForDeal(deal.name); if (la) { const pc2 = la.priority === 'URGENT' ? 'var(--accent-red)' : la.priority === 'HIGH' ? 'var(--accent-orange)' : 'var(--text-secondary)'; const at = la.action.substring(0,100) + (la.action.length > 100 ? '...' : ''); return `<div class="pipeline-card-detail" style="color:${pc2};margin-top:4px">\u2192 ${at}</div>`; } return deal.nextAction ? `<div class="pipeline-card-detail" style="color:var(--text-secondary);margin-top:4px">\u2192 ${deal.nextAction.substring(0,100)}${deal.nextAction.length > 100 ? '...' : ''}</div>` : ''; })()}
+    ${(() => { const la = getNextActionForDeal(deal.name); if (la) { const pc2 = la.priority === 'URGENT' ? 'var(--accent-red)' : la.priority === 'HIGH' ? 'var(--accent-orange)' : 'var(--text-secondary)'; const at = la.action.substring(0,100) + (la.action.length > 100 ? '...' : ''); return `<div class="pipeline-card-detail" style="color:${pc2};margin-top:4px">\u2192 ${at}</div>`; } return ''; })()}
     <div class="pipeline-card-badges">
       <span class="pipeline-card-priority" style="background:${pc.bg};color:${pc.color}">${deal.priority || '\u2014'}</span>
       ${deal.status !== col.key ? `<span class="pipeline-card-priority" style="background:${col.bg};color:${col.color}">${deal.status}</span>` : ''}
