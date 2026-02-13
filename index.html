@@ -434,7 +434,7 @@ body::before {
   transform: translateY(-1px);
 }
 .pipeline-card.selected::after {
-  content: '✓'; position: absolute; top: 6px; right: 8px;
+  content: '✓'; position: absolute; top: 6px; right: 34px;
   width: 16px; height: 16px; font-size: 10px; line-height: 16px; text-align: center;
   background: var(--accent-cyan); color: #0a0e1a; border-radius: 50%;
   font-weight: 800; box-shadow: 0 0 8px rgba(6,182,212,0.5);
@@ -484,6 +484,104 @@ body::before {
   display: flex; justify-content: space-between; align-items: center;
   margin-top: 6px; font-size: 9px; color: var(--text-muted);
 }
+
+/* Three-dots edit button on pipeline cards */
+.pipeline-card-edit-btn {
+  position: absolute; top: 8px; right: 8px;
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid transparent; border-radius: 6px;
+  color: var(--text-muted); font-size: 18px; cursor: pointer;
+  opacity: 0; transition: all 0.2s; z-index: 2;
+  line-height: 1; padding: 0; font-family: inherit;
+}
+.pipeline-card:hover .pipeline-card-edit-btn,
+.pipeline-card.selected .pipeline-card-edit-btn { opacity: 1; }
+.pipeline-card-edit-btn:hover {
+  background: rgba(255,255,255,0.1); border-color: var(--border-bright); color: var(--text-primary);
+}
+
+/* Deal Edit Popover */
+.deal-edit-backdrop { position: fixed; inset: 0; z-index: 1499; display: none; }
+.deal-edit-backdrop.open { display: block; }
+.deal-edit-popover {
+  position: fixed; z-index: 1500; width: 380px; max-height: 80vh; overflow-y: auto;
+  background: var(--bg-secondary); border: 1px solid var(--border-bright);
+  border-radius: 16px; padding: 20px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05);
+  backdrop-filter: blur(20px); display: none; font-family: 'Inter', sans-serif;
+}
+.deal-edit-popover.open { display: block; animation: popover-in 0.2s ease; }
+@keyframes popover-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.deal-edit-popover::-webkit-scrollbar { width: 6px; }
+.deal-edit-popover::-webkit-scrollbar-track { background: transparent; }
+.deal-edit-popover::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+.deal-edit-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border);
+}
+.deal-edit-title {
+  font-size: 15px; font-weight: 700; color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px;
+}
+.deal-edit-close {
+  width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text-muted); cursor: pointer; font-size: 16px; transition: all 0.2s;
+  flex-shrink: 0;
+}
+.deal-edit-close:hover { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: var(--accent-red); }
+.deal-edit-field { margin-bottom: 14px; }
+.deal-edit-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1px; color: var(--text-muted); margin-bottom: 6px;
+}
+.deal-edit-input {
+  width: 100%; padding: 8px 12px; background: var(--bg-glass);
+  border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text-primary); font-size: 13px; font-family: inherit;
+  outline: none; transition: border-color 0.2s;
+}
+.deal-edit-input:focus { border-color: var(--accent-blue); }
+.deal-edit-textarea { resize: vertical; min-height: 60px; }
+.deal-edit-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.deal-edit-chip {
+  padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600;
+  cursor: pointer; border: 1px solid var(--border); background: var(--bg-glass);
+  color: var(--text-secondary); transition: all 0.15s; user-select: none;
+}
+.deal-edit-chip:hover { border-color: var(--border-bright); color: var(--text-primary); background: rgba(255,255,255,0.06); }
+.deal-edit-chip.selected { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.4); color: var(--accent-blue); }
+.deal-edit-chip.chip-high.selected { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.4); color: #ef4444; }
+.deal-edit-chip.chip-medium.selected { background: rgba(245,158,11,0.15); border-color: rgba(245,158,11,0.4); color: #f59e0b; }
+.deal-edit-chip.chip-low.selected { background: rgba(100,116,139,0.15); border-color: rgba(100,116,139,0.4); color: #94a3b8; }
+.deal-edit-chip.chip-signed.selected { background: rgba(16,185,129,0.1); border-color: rgba(16,185,129,0.3); color: #10b981; }
+.deal-edit-chip.chip-sent.selected { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.3); color: #f59e0b; }
+.deal-edit-chip.chip-loi.selected { background: rgba(139,92,246,0.1); border-color: rgba(139,92,246,0.3); color: #8b5cf6; }
+.deal-edit-chip.chip-active.selected { background: rgba(16,185,129,0.1); border-color: rgba(16,185,129,0.3); color: var(--accent-green); }
+.deal-edit-chip.chip-new-lead.selected { background: rgba(6,182,212,0.1); border-color: rgba(6,182,212,0.3); color: var(--accent-cyan); }
+.deal-edit-chip.chip-stand-by.selected { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.3); color: var(--accent-orange); }
+.deal-edit-chip.chip-stalled.selected { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: var(--accent-red); }
+.deal-edit-chip.chip-due-diligence.selected { background: rgba(139,92,246,0.1); border-color: rgba(139,92,246,0.3); color: var(--accent-purple); }
+.deal-edit-actions {
+  display: flex; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border);
+}
+.deal-edit-save {
+  flex: 1; padding: 10px; background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+  border: none; border-radius: 10px; color: white; font-weight: 600;
+  font-size: 13px; cursor: pointer; font-family: inherit; transition: all 0.3s;
+}
+.deal-edit-save:hover { transform: translateY(-1px); box-shadow: 0 4px 20px var(--glow-blue); }
+.deal-edit-save:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+.deal-edit-cancel {
+  padding: 10px 20px; background: var(--bg-glass); border: 1px solid var(--border);
+  border-radius: 10px; color: var(--text-secondary); font-weight: 600;
+  font-size: 13px; cursor: pointer; font-family: inherit;
+}
+.deal-edit-cancel:hover { border-color: var(--border-bright); color: var(--text-primary); }
 
 /* Section Tabs */
 .section-tabs {
@@ -906,6 +1004,20 @@ document.addEventListener('DOMContentLoaded', () => {
   </div>
 </div>
 
+<!-- Deal Edit Popover (singleton, repositioned per card) -->
+<div class="deal-edit-backdrop" id="dealEditBackdrop"></div>
+<div class="deal-edit-popover" id="dealEditPopover">
+  <div class="deal-edit-header">
+    <div class="deal-edit-title" id="dealEditTitle"></div>
+    <button class="deal-edit-close" id="dealEditClose">&times;</button>
+  </div>
+  <div id="dealEditFields"></div>
+  <div class="deal-edit-actions">
+    <button class="deal-edit-cancel" id="dealEditCancel">Cancel</button>
+    <button class="deal-edit-save" id="dealEditSave">Save Changes</button>
+  </div>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 <script>
@@ -993,6 +1105,7 @@ async function init() {
   buildFilters();
   applyFilters();
   renderPipeline();
+  initDealEditPopover();
 }
 
 // ============================================================
@@ -1443,7 +1556,7 @@ function renderFilterGroup(containerId, items, filterType, companies) {
     btn.dataset.filterKey = item.key;
     btn.dataset.filterColor = item.color;
     const bullet = item.starIcon
-      ? `<svg viewBox="0 0 24 24" width="10" height="10" style="flex-shrink:0"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" fill="${item.color}" stroke="rgba(255,255,255,0.7)" stroke-width="1.5" stroke-linejoin="round"/></svg>`
+      ? `<svg viewBox="0 0 24 24" width="14" height="14" style="flex-shrink:0"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" fill="${item.color}" stroke="rgba(255,255,255,0.7)" stroke-width="1.5" stroke-linejoin="round"/></svg>`
       : `<span class="filter-dot" style="background:${item.color}"></span>`;
     btn.innerHTML = `${bullet}${item.label}<span class="filter-count">${count}</span>`;
     btn.addEventListener('click', () => {
@@ -1727,6 +1840,7 @@ function renderPipeline() {
             const hasSV = d.siteVisit && d.siteVisit !== 'Visit TBD' && d.siteVisit !== 'N/A';
             return `
               <div class="pipeline-card" data-deal-name="${d.name}" data-original-status="${d.status}" data-airtable-id="${d.airtableId || ''}">
+                <button class="pipeline-card-edit-btn" title="Edit deal">&#8942;</button>
                 <div class="pipeline-card-name">${d.name}</div>
                 <div class="pipeline-card-detail"><strong>${d.states || '—'}</strong> · ${d.type || 'TBD'}</div>
                 ${d.keyContact ? `<div class="pipeline-card-detail">👤 ${d.keyContact}</div>` : ''}
@@ -1749,9 +1863,10 @@ function renderPipeline() {
     `;
   }).join('');
 
-  // Initialize drag-and-drop and card selection after rendering
+  // Initialize drag-and-drop, card selection, and edit buttons after rendering
   initSortable();
   initCardSelection();
+  wireAllEditButtons();
 
   // Render action items (in separate tab panel)
   const actionsGrid = document.getElementById('actionItemsGrid');
@@ -1794,6 +1909,8 @@ function initSortable() {
       ghostClass: 'sortable-ghost',
       chosenClass: 'sortable-chosen',
       dragClass: 'sortable-drag',
+      filter: '.pipeline-card-edit-btn',
+      preventOnFilter: false,
       easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
       onEnd: function (evt) {
         isDragging = Date.now();
@@ -2114,6 +2231,287 @@ function showToast(message, type = 'success') {
   toast.className = 'toast show ' + type;
   clearTimeout(toast._timeout);
   toast._timeout = setTimeout(() => { toast.className = 'toast'; }, 4000);
+}
+
+// ============================================================
+// DEAL EDIT POPOVER
+// ============================================================
+const DEAL_EDIT_FIELDS = [
+  { key: 'status', label: 'Status', type: 'single-select',
+    options: ['Active', 'New Lead', 'Stand By', 'Stalled', 'Due Diligence'],
+    chipClass: k => 'chip-' + k.toLowerCase().replace(/\s+/g, '-') },
+  { key: 'priority', label: 'Priority', type: 'single-select',
+    options: ['1 - High', '2 - Medium', '3 - Low'],
+    chipClass: k => k.includes('High') ? 'chip-high' : k.includes('Medium') ? 'chip-medium' : 'chip-low' },
+  { key: 'type', label: 'Type', type: 'text' },
+  { key: 'states', label: 'States', type: 'text' },
+  { key: 'keyContact', label: 'Key Contact', type: 'text' },
+  { key: 'ebitda', label: 'EBITDA / Financials', type: 'text' },
+  { key: 'askingPrice', label: 'Asking Price', type: 'text' },
+  { key: 'ndaStatus', label: 'NDA Status', type: 'single-select',
+    options: ['Signed', 'Sent', 'LOI', 'N/A'],
+    chipClass: k => k === 'Signed' ? 'chip-signed' : k === 'Sent' ? 'chip-sent' : k === 'LOI' ? 'chip-loi' : '' },
+  { key: 'dataRoom', label: 'Data Room', type: 'text' },
+  { key: 'siteVisit', label: 'Site Visit', type: 'text' },
+  { key: 'nextAction', label: 'Next Action', type: 'textarea' },
+  { key: 'actionOwner', label: 'Action Owner', type: 'multi-select',
+    optionsFn: () => {
+      const owners = new Set();
+      DATA.pipeline.forEach(d => {
+        if (d.actionOwner) d.actionOwner.split(/[\/,&]+/).map(s => s.trim()).filter(Boolean).forEach(o => owners.add(o));
+      });
+      return [...owners].sort();
+    },
+    chipClass: () => '' },
+  { key: 'deadline', label: 'Deadline', type: 'text' },
+  { key: 'notes', label: 'Notes', type: 'textarea' },
+];
+
+let editingDeal = null;
+let editingCardEl = null;
+let editFormValues = {};
+
+function openDealEditPopover(dealName, cardElement) {
+  const deal = DATA.pipeline.find(d => d.name === dealName);
+  if (!deal) return;
+
+  editingDeal = deal;
+  editingCardEl = cardElement;
+  editFormValues = {};
+
+  document.getElementById('dealEditTitle').textContent = deal.name;
+
+  const container = document.getElementById('dealEditFields');
+  container.innerHTML = DEAL_EDIT_FIELDS.map(field => {
+    const currentVal = deal[field.key] || '';
+    editFormValues[field.key] = currentVal;
+
+    if (field.type === 'single-select') {
+      const chips = field.options.map(opt => {
+        const isSelected = currentVal === opt;
+        const cls = field.chipClass ? field.chipClass(opt) : '';
+        return `<button class="deal-edit-chip ${cls} ${isSelected ? 'selected' : ''}" data-field="${field.key}" data-value="${opt}">${opt}</button>`;
+      }).join('');
+      return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div><div class="deal-edit-chips" data-field="${field.key}" data-mode="single">${chips}</div></div>`;
+    }
+
+    if (field.type === 'multi-select') {
+      const options = field.optionsFn ? field.optionsFn() : (field.options || []);
+      const currentParts = currentVal.split(/[\/,&]+/).map(s => s.trim()).filter(Boolean);
+      const chips = options.map(opt => {
+        const isSelected = currentParts.some(p => p.toLowerCase() === opt.toLowerCase());
+        const cls = field.chipClass ? field.chipClass(opt) : '';
+        return `<button class="deal-edit-chip ${cls} ${isSelected ? 'selected' : ''}" data-field="${field.key}" data-value="${opt}">${opt}</button>`;
+      }).join('');
+      return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label} <span style="font-weight:400;opacity:0.5">(multi)</span></div><div class="deal-edit-chips" data-field="${field.key}" data-mode="multi">${chips}</div></div>`;
+    }
+
+    if (field.type === 'textarea') {
+      return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div><textarea class="deal-edit-input deal-edit-textarea" data-field="${field.key}">${currentVal}</textarea></div>`;
+    }
+
+    return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div><input class="deal-edit-input" type="text" data-field="${field.key}" value="${currentVal.replace(/"/g, '&quot;')}"></div>`;
+  }).join('');
+
+  // Wire chip click handlers
+  container.querySelectorAll('.deal-edit-chip').forEach(chip => {
+    chip.addEventListener('click', function() {
+      const fieldKey = this.dataset.field;
+      const value = this.dataset.value;
+      const chipsContainer = this.closest('.deal-edit-chips');
+      const mode = chipsContainer.dataset.mode;
+
+      if (mode === 'multi') {
+        this.classList.toggle('selected');
+        const selected = [...chipsContainer.querySelectorAll('.deal-edit-chip.selected')].map(c => c.dataset.value);
+        editFormValues[fieldKey] = selected.join(' / ');
+      } else {
+        chipsContainer.querySelectorAll('.deal-edit-chip').forEach(c => c.classList.remove('selected'));
+        this.classList.add('selected');
+        editFormValues[fieldKey] = value;
+      }
+    });
+  });
+
+  // Wire text input handlers
+  container.querySelectorAll('.deal-edit-input').forEach(input => {
+    input.addEventListener('input', function() {
+      editFormValues[this.dataset.field] = this.value;
+    });
+  });
+
+  positionPopover(cardElement);
+  document.getElementById('dealEditPopover').classList.add('open');
+  document.getElementById('dealEditBackdrop').classList.add('open');
+}
+
+function positionPopover(cardElement) {
+  const popover = document.getElementById('dealEditPopover');
+  const rect = cardElement.getBoundingClientRect();
+  const popoverWidth = 380;
+  const margin = 12;
+
+  let left = rect.right + margin;
+  let top = rect.top;
+
+  if (left + popoverWidth > window.innerWidth - 20) {
+    left = rect.left - popoverWidth - margin;
+  }
+  if (left < 20) {
+    left = Math.max(20, (window.innerWidth - popoverWidth) / 2);
+  }
+  const maxTop = window.innerHeight - 500;
+  if (top > maxTop) top = Math.max(20, maxTop);
+  if (top < 20) top = 20;
+
+  popover.style.left = left + 'px';
+  popover.style.top = top + 'px';
+}
+
+function closeDealEditPopover() {
+  document.getElementById('dealEditPopover').classList.remove('open');
+  document.getElementById('dealEditBackdrop').classList.remove('open');
+  editingDeal = null;
+  editingCardEl = null;
+  editFormValues = {};
+}
+
+async function saveDealEdits() {
+  if (!editingDeal) return;
+
+  const saveBtn = document.getElementById('dealEditSave');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving...';
+
+  const changes = {};
+  DEAL_EDIT_FIELDS.forEach(field => {
+    const newVal = editFormValues[field.key];
+    if (newVal !== undefined && newVal !== (editingDeal[field.key] || '')) {
+      changes[field.key] = newVal;
+    }
+  });
+
+  if (Object.keys(changes).length === 0) {
+    showToast('No changes to save', 'pending');
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save Changes';
+    closeDealEditPopover();
+    return;
+  }
+
+  // Apply to in-memory data
+  Object.assign(editingDeal, changes);
+
+  // If status changed, move card to new column
+  if (changes.status) {
+    writeStatusToSheet(editingDeal.name, changes.status);
+
+    const targetColCards = document.querySelector(`.pipeline-col-cards[data-status="${changes.status}"]`);
+    if (targetColCards && editingCardEl) {
+      targetColCards.appendChild(editingCardEl);
+      editingCardEl.setAttribute('data-original-status', changes.status);
+    }
+    updateColumnCounts();
+  }
+
+  // Write non-status fields to sheet
+  const nonStatusChanges = Object.fromEntries(Object.entries(changes).filter(([k]) => k !== 'status'));
+  if (Object.keys(nonStatusChanges).length > 0) {
+    writeDealFieldsToSheet(editingDeal.name, nonStatusChanges);
+  }
+
+  // Update card visually
+  if (editingCardEl) {
+    updateCardContent(editingCardEl, editingDeal);
+  }
+
+  showToast(`Updated "${editingDeal.name}"`, 'success');
+  saveBtn.disabled = false;
+  saveBtn.textContent = 'Save Changes';
+  closeDealEditPopover();
+}
+
+function updateCardContent(cardEl, deal) {
+  const pc = PRIORITY_COLORS[deal.priority] || PRIORITY_COLORS['3 - Low'];
+  const ndaCls = (deal.ndaStatus||'').toLowerCase().includes('signed') ? 'nda-signed'
+    : (deal.ndaStatus||'').toLowerCase().includes('sent') ? 'nda-sent'
+    : (deal.ndaStatus||'').toLowerCase().includes('loi') ? 'nda-loi' : '';
+  const hasDR = deal.dataRoom && deal.dataRoom !== 'No' && deal.dataRoom !== 'N/A';
+  const hasSV = deal.siteVisit && deal.siteVisit !== 'Visit TBD' && deal.siteVisit !== 'N/A';
+
+  const colKey = cardEl.closest('.pipeline-col-cards')?.getAttribute('data-status') || '';
+  const col = PIPELINE_COLUMNS.find(c => c.key === colKey) || PIPELINE_COLUMNS[0];
+
+  cardEl.innerHTML = `
+    <button class="pipeline-card-edit-btn" title="Edit deal">&#8942;</button>
+    <div class="pipeline-card-name">${deal.name}</div>
+    <div class="pipeline-card-detail"><strong>${deal.states || '\u2014'}</strong> \u00b7 ${deal.type || 'TBD'}</div>
+    ${deal.keyContact ? `<div class="pipeline-card-detail">\ud83d\udc64 ${deal.keyContact}</div>` : ''}
+    ${deal.ebitda && deal.ebitda !== 'TBD' ? `<div class="pipeline-card-detail" style="color:var(--accent-green)">\ud83d\udcb0 ${deal.ebitda}</div>` : ''}
+    ${deal.nextAction ? `<div class="pipeline-card-detail" style="color:var(--text-secondary);margin-top:4px">\u2192 ${deal.nextAction.substring(0, 100)}${deal.nextAction.length > 100 ? '...' : ''}</div>` : ''}
+    <div class="pipeline-card-badges">
+      <span class="pipeline-card-priority" style="background:${pc.bg};color:${pc.color}">${deal.priority || '\u2014'}</span>
+      ${deal.status !== col.key ? `<span class="pipeline-card-priority" style="background:${col.bg};color:${col.color}">${deal.status}</span>` : ''}
+      ${ndaCls ? `<span class="pipeline-card-badge ${ndaCls}">NDA: ${deal.ndaStatus}</span>` : ''}
+      ${hasDR ? `<span class="pipeline-card-badge data-room">\ud83d\udcc1 ${deal.dataRoom}</span>` : ''}
+      ${hasSV ? `<span class="pipeline-card-badge site-visited">\ud83d\udccd ${deal.siteVisit}</span>` : ''}
+    </div>
+    ${deal.actionOwner || deal.deadline ? `<div class="pipeline-card-meta"><span>${deal.actionOwner ? '\ud83c\udfaf ' + deal.actionOwner : ''}</span><span>${deal.deadline && deal.deadline !== 'TBD' ? '\ud83d\udcc5 ' + deal.deadline : ''}</span></div>` : ''}
+    ${deal.notes ? `<div class="pipeline-card-notes">${deal.notes}</div>` : ''}
+  `;
+
+  wireEditButton(cardEl);
+}
+
+async function writeDealFieldsToSheet(dealName, changes) {
+  if (!APPS_SCRIPT_URL) {
+    showToast('Apps Script not configured \u2014 changes saved locally only', 'pending');
+    return;
+  }
+
+  try {
+    const resp = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ dealName, fields: changes })
+    });
+    const result = await resp.json();
+    if (!result.success) {
+      console.warn('Field write-back failed:', result.error);
+    }
+  } catch (err) {
+    console.warn('Field write-back network error:', err.message);
+  }
+}
+
+function wireEditButton(cardEl) {
+  const btn = cardEl.querySelector('.pipeline-card-edit-btn');
+  if (!btn) return;
+  btn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    e.preventDefault();
+    const dealName = cardEl.getAttribute('data-deal-name');
+    openDealEditPopover(dealName, cardEl);
+  });
+  btn.addEventListener('mousedown', function(e) {
+    e.stopPropagation();
+  });
+}
+
+function wireAllEditButtons() {
+  document.querySelectorAll('.pipeline-card').forEach(wireEditButton);
+}
+
+function initDealEditPopover() {
+  document.getElementById('dealEditClose').addEventListener('click', closeDealEditPopover);
+  document.getElementById('dealEditCancel').addEventListener('click', closeDealEditPopover);
+  document.getElementById('dealEditBackdrop').addEventListener('click', closeDealEditPopover);
+  document.getElementById('dealEditSave').addEventListener('click', saveDealEdits);
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && document.getElementById('dealEditPopover').classList.contains('open')) {
+      closeDealEditPopover();
+    }
+  });
 }
 
 // ============================================================

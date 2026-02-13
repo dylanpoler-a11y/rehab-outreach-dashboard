@@ -17,17 +17,20 @@
  * 10. Paste that URL into your index.html where it says APPS_SCRIPT_URL = ''
  */
 
+// Field key -> Google Sheet column header mapping
+var FIELD_TO_HEADER = {
+  'status': 'Status', 'priority': 'Priority', 'type': 'Type',
+  'states': 'State(s)', 'keyContact': 'Key Contact',
+  'ebitda': 'EBITDA / Financials', 'askingPrice': 'Asking Price',
+  'ndaStatus': 'NDA Status', 'dataRoom': 'Data Room', 'siteVisit': 'Site Visit',
+  'nextAction': 'Next Action', 'actionOwner': 'Action Owner',
+  'deadline': 'Deadline', 'notes': 'Notes', 'lastUpdate': 'Last Update'
+};
+
 function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
     var dealName = data.dealName;
-    var newStatus = data.newStatus;
-
-    if (!dealName || !newStatus) {
-      return ContentService.createTextOutput(
-        JSON.stringify({ success: false, error: 'Missing dealName or newStatus' })
-      ).setMimeType(ContentService.MimeType.JSON);
-    }
 
     // Open the Pipeline Dashboard tab
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -45,7 +48,6 @@ function doPost(e) {
     // Find header row (look for "Facility Name" in column A or B)
     var headerRow = -1;
     var nameCol = -1;
-    var statusCol = -1;
 
     for (var r = 0; r < Math.min(values.length, 10); r++) {
       for (var c = 0; c < values[r].length; c++) {
@@ -53,9 +55,6 @@ function doPost(e) {
         if (cell === 'Facility Name') {
           headerRow = r;
           nameCol = c;
-        }
-        if (cell === 'Status' && headerRow === r) {
-          statusCol = c;
         }
       }
       if (headerRow >= 0) break;
@@ -67,42 +66,55 @@ function doPost(e) {
       ).setMimeType(ContentService.MimeType.JSON);
     }
 
-    if (statusCol < 0) {
-      // If Status wasn't on the same row scan, look for it explicitly
-      for (var c = 0; c < values[headerRow].length; c++) {
-        if (String(values[headerRow][c]).trim() === 'Status') {
-          statusCol = c;
-          break;
-        }
-      }
-    }
-
-    if (statusCol < 0) {
-      return ContentService.createTextOutput(
-        JSON.stringify({ success: false, error: 'Could not find "Status" column' })
-      ).setMimeType(ContentService.MimeType.JSON);
+    // Build column index map from headers
+    var colMap = {};
+    for (var c = 0; c < values[headerRow].length; c++) {
+      colMap[String(values[headerRow][c]).trim()] = c;
     }
 
     // Find the deal row by facility name
-    var updated = false;
+    var dealRow = -1;
     for (var r = headerRow + 1; r < values.length; r++) {
       var name = String(values[r][nameCol]).trim();
-      if (name === dealName) {
-        // Update the status cell (rows and cols are 1-indexed in setCell)
-        sheet.getRange(r + 1, statusCol + 1).setValue(newStatus);
-        updated = true;
-        break;
-      }
+      if (name === dealName) { dealRow = r; break; }
     }
 
-    if (!updated) {
+    if (dealRow < 0) {
       return ContentService.createTextOutput(
         JSON.stringify({ success: false, error: 'Deal "' + dealName + '" not found in sheet' })
       ).setMimeType(ContentService.MimeType.JSON);
     }
 
+    // Legacy path: status-only update (from drag-and-drop)
+    if (data.newStatus && !data.fields) {
+      var statusCol = colMap['Status'];
+      if (statusCol === undefined) {
+        return ContentService.createTextOutput(
+          JSON.stringify({ success: false, error: 'Could not find "Status" column' })
+        ).setMimeType(ContentService.MimeType.JSON);
+      }
+      sheet.getRange(dealRow + 1, statusCol + 1).setValue(data.newStatus);
+      return ContentService.createTextOutput(
+        JSON.stringify({ success: true, deal: dealName, newStatus: data.newStatus })
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // Multi-field update path (from edit popover)
+    if (data.fields) {
+      var updatedFields = [];
+      for (var fieldKey in data.fields) {
+        var header = FIELD_TO_HEADER[fieldKey];
+        if (!header || colMap[header] === undefined) continue;
+        sheet.getRange(dealRow + 1, colMap[header] + 1).setValue(data.fields[fieldKey]);
+        updatedFields.push(fieldKey);
+      }
+      return ContentService.createTextOutput(
+        JSON.stringify({ success: true, deal: dealName, updated: updatedFields })
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+
     return ContentService.createTextOutput(
-      JSON.stringify({ success: true, deal: dealName, newStatus: newStatus })
+      JSON.stringify({ success: false, error: 'Missing newStatus or fields' })
     ).setMimeType(ContentService.MimeType.JSON);
 
   } catch (err) {
