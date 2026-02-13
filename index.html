@@ -585,6 +585,48 @@ body::before {
 .search-select-option:hover { background: rgba(59,130,246,0.1); color: var(--text-primary); }
 .search-select-option strong { color: var(--accent-blue); font-weight: 700; }
 .search-select-no-results { padding: 12px; font-size: 12px; color: var(--text-muted); text-align: center; font-style: italic; }
+/* Linked action items in deal edit popover */
+.linked-actions-list { display: flex; flex-direction: column; gap: 6px; }
+.linked-action-item {
+  display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px;
+  background: var(--bg-glass); border: 1px solid var(--border); border-radius: 8px;
+  transition: all 0.2s; position: relative;
+}
+.linked-action-item:hover { border-color: var(--border-bright); }
+.linked-action-item.is-done { opacity: 0.4; }
+.linked-action-item.is-done .linked-action-text { text-decoration: line-through; }
+.linked-action-done-btn {
+  width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--border-bright);
+  background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  color: transparent; font-size: 11px; transition: all 0.15s; flex-shrink: 0; margin-top: 1px;
+}
+.linked-action-done-btn:hover { border-color: #10b981; color: #10b981; }
+.linked-action-done-btn.checked { background: rgba(16,185,129,0.15); border-color: #10b981; color: #10b981; }
+.linked-action-priority {
+  font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 4px;
+  text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0; margin-top: 1px;
+}
+.linked-action-priority.urgent { background: rgba(239,68,68,0.15); color: #ef4444; }
+.linked-action-priority.high { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.linked-action-priority.medium { background: rgba(59,130,246,0.15); color: #3b82f6; }
+.linked-action-priority.low { background: rgba(100,116,139,0.15); color: #94a3b8; }
+.linked-action-body { flex: 1; min-width: 0; }
+.linked-action-text { font-size: 12px; color: var(--text-primary); line-height: 1.4; }
+.linked-action-meta { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+.linked-action-edit-btn {
+  width: 20px; height: 20px; border: none; background: transparent; cursor: pointer;
+  color: var(--text-muted); font-size: 14px; opacity: 0; transition: opacity 0.15s;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.linked-action-item:hover .linked-action-edit-btn { opacity: 1; }
+.linked-action-edit-btn:hover { color: var(--text-primary); }
+.linked-actions-empty {
+  padding: 12px; text-align: center; font-size: 12px; color: var(--text-muted);
+  font-style: italic; background: var(--bg-glass); border-radius: 8px;
+  border: 1px dashed var(--border);
+}
+.linked-actions-fallback { margin-top: 8px; }
+.linked-actions-fallback .deal-edit-label { font-size: 9px; margin-bottom: 4px; opacity: 0.6; }
 .deal-edit-actions {
   display: flex; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border);
 }
@@ -1991,20 +2033,31 @@ function renderPipeline() {
 let actionDoneSet = new Set(); // indices of completed actions
 let actionShowDone = false;
 
-function getNextActionForDeal(dealName) {
-  if (!DATA.actions || DATA.actions.length === 0) return null;
-  const priorityOrder = { 'URGENT': 0, 'HIGH': 1, 'MEDIUM': 2, 'LOW': 3 };
+function matchesDeal(dealName, facility) {
   const dealLower = dealName.toLowerCase();
-  const candidates = DATA.actions
+  const facLower = (facility || '').toLowerCase();
+  if (!facLower) return false;
+  return dealLower === facLower || dealLower.includes(facLower) || facLower.includes(dealLower);
+}
+
+function getAllActionsForDeal(dealName) {
+  if (!DATA.actions || DATA.actions.length === 0) return [];
+  const priorityOrder = { 'URGENT': 0, 'HIGH': 1, 'MEDIUM': 2, 'LOW': 3 };
+  return DATA.actions
     .map((a, i) => ({ ...a, _idx: i }))
-    .filter(a => {
-      if (actionDoneSet.has(a._idx)) return false;
-      const facLower = (a.facility || '').toLowerCase();
-      if (!facLower) return false;
-      return dealLower === facLower || dealLower.includes(facLower) || facLower.includes(dealLower);
-    })
-    .sort((a, b) => (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9));
-  return candidates.length > 0 ? candidates[0] : null;
+    .filter(a => matchesDeal(dealName, a.facility))
+    .sort((a, b) => {
+      const doneA = actionDoneSet.has(a._idx) ? 1 : 0;
+      const doneB = actionDoneSet.has(b._idx) ? 1 : 0;
+      if (doneA !== doneB) return doneA - doneB;
+      return (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9);
+    });
+}
+
+function getNextActionForDeal(dealName) {
+  const all = getAllActionsForDeal(dealName);
+  const pending = all.filter(a => !actionDoneSet.has(a._idx));
+  return pending.length > 0 ? pending[0] : null;
 }
 
 function initActionItems() {
@@ -2724,7 +2777,7 @@ const DEAL_EDIT_FIELDS = [
     chipClass: k => k === 'Signed' ? 'chip-signed' : k === 'Sent' ? 'chip-sent' : k === 'LOI' ? 'chip-loi' : '' },
   { key: 'dataRoom', label: 'Data Room', type: 'text' },
   { key: 'siteVisit', label: 'Site Visit', type: 'text' },
-  { key: 'nextAction', label: 'Next Action', type: 'textarea' },
+  { key: 'nextAction', label: 'Action Items', type: 'linked-actions' },
   { key: 'actionOwner', label: 'Action Owner', type: 'multi-select',
     optionsFn: () => {
       const owners = new Set();
@@ -2781,6 +2834,34 @@ function openDealEditPopover(dealName, cardElement) {
       return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div><textarea class="deal-edit-input deal-edit-textarea" data-field="${field.key}">${currentVal}</textarea></div>`;
     }
 
+    if (field.type === 'linked-actions') {
+      const actions = getAllActionsForDeal(deal.name);
+      let html = `<div class="deal-edit-field"><div class="deal-edit-label">${field.label} <span style="font-weight:400;opacity:0.5">(${actions.filter(a => !actionDoneSet.has(a._idx)).length} pending)</span></div>`;
+      if (actions.length > 0) {
+        html += '<div class="linked-actions-list" id="linkedActionsList">';
+        html += actions.map(a => {
+          const isDone = actionDoneSet.has(a._idx);
+          const pCls = (a.priority || '').toLowerCase();
+          return `<div class="linked-action-item ${isDone ? 'is-done' : ''}" data-action-idx="${a._idx}">
+            <button class="linked-action-done-btn ${isDone ? 'checked' : ''}" data-idx="${a._idx}" title="${isDone ? 'Mark undone' : 'Mark done'}">&#10003;</button>
+            <span class="linked-action-priority ${pCls}">${a.priority || '—'}</span>
+            <div class="linked-action-body">
+              <div class="linked-action-text">${a.action}</div>
+              <div class="linked-action-meta">${a.owner || ''}${a.deadline ? ' · ' + a.deadline : ''}${a.status ? ' · ' + a.status : ''}</div>
+            </div>
+            <button class="linked-action-edit-btn" data-idx="${a._idx}" title="Edit action item">&#8942;</button>
+          </div>`;
+        }).join('');
+        html += '</div>';
+      } else {
+        html += '<div class="linked-actions-empty">No action items linked to this deal</div>';
+      }
+      // Keep fallback manual field
+      html += `<div class="linked-actions-fallback"><div class="deal-edit-label">Manual Next Action</div><textarea class="deal-edit-input deal-edit-textarea" data-field="nextAction" style="min-height:40px;font-size:11px">${currentVal}</textarea></div>`;
+      html += '</div>';
+      return html;
+    }
+
     return `<div class="deal-edit-field"><div class="deal-edit-label">${field.label}</div><input class="deal-edit-input" type="text" data-field="${field.key}" value="${currentVal.replace(/"/g, '&quot;')}"></div>`;
   }).join('');
 
@@ -2808,6 +2889,49 @@ function openDealEditPopover(dealName, cardElement) {
   container.querySelectorAll('.deal-edit-input').forEach(input => {
     input.addEventListener('input', function() {
       editFormValues[this.dataset.field] = this.value;
+    });
+  });
+
+  // Wire linked action item done buttons
+  container.querySelectorAll('.linked-action-done-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const idx = parseInt(this.dataset.idx);
+      const item = this.closest('.linked-action-item');
+      if (actionDoneSet.has(idx)) {
+        actionDoneSet.delete(idx);
+        this.classList.remove('checked');
+        item.classList.remove('is-done');
+      } else {
+        actionDoneSet.add(idx);
+        this.classList.add('checked');
+        item.classList.add('is-done');
+      }
+      try { localStorage.setItem('actionDoneSet', JSON.stringify([...actionDoneSet])); } catch(e) {}
+      // Update the pending count label
+      const label = container.querySelector('.deal-edit-label span');
+      if (label) {
+        const actions = getAllActionsForDeal(deal.name);
+        label.textContent = `(${actions.filter(a => !actionDoneSet.has(a._idx)).length} pending)`;
+      }
+    });
+  });
+
+  // Wire linked action item edit buttons — open action edit popover
+  container.querySelectorAll('.linked-action-edit-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const idx = parseInt(this.dataset.idx);
+      const action = DATA.actions[idx];
+      if (!action) return;
+      // Close deal popover, open action edit popover
+      const cardEl = editingCardEl;
+      const dealRef = editingDeal;
+      closeDealEditPopover();
+      // Small delay to let close animation finish
+      setTimeout(() => {
+        openActionEditPopover(action, idx, cardEl || document.querySelector(`.pipeline-card[data-deal-name="${dealRef.name}"]`));
+      }, 100);
     });
   });
 
@@ -2845,6 +2969,9 @@ function closeDealEditPopover() {
   editingDeal = null;
   editingCardEl = null;
   editFormValues = {};
+  // Refresh pipeline cards in case action done states changed
+  refreshPipelineCardActions();
+  renderActionItems();
 }
 
 async function saveDealEdits() {
