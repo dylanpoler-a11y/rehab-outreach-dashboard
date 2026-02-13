@@ -170,19 +170,49 @@ body::before {
   padding: 8px 10px; background: transparent; border: 1px solid transparent;
   border-radius: 8px; color: var(--text-secondary); font-size: 12px;
   font-weight: 500; cursor: pointer; transition: all 0.2s;
-  font-family: inherit; text-align: left;
+  font-family: inherit; text-align: left; user-select: none;
 }
 .filter-btn:hover { background: var(--bg-glass); border-color: var(--border); color: var(--text-primary); }
 .filter-btn.active { background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3); color: var(--accent-blue); }
 
 .filter-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
+/* Reorder arrows for filter priority */
+.reorder-arrows {
+  display: inline-flex; flex-direction: column; gap: 0; flex-shrink: 0;
+  opacity: 0.4; transition: opacity 0.15s;
+}
+.filter-btn:hover .reorder-arrows { opacity: 1; }
+.reorder-arrow {
+  background: none; border: none; color: var(--text-muted); cursor: pointer;
+  font-size: 8px; line-height: 8px; padding: 0px 3px; border-radius: 3px; transition: all 0.15s;
+  font-family: inherit; display: block;
+}
+.reorder-arrow:hover { color: var(--accent-cyan); background: rgba(6,182,212,0.15); }
+
 .filter-count {
-  margin-left: auto; font-size: 10px; font-weight: 600;
+  font-size: 10px; font-weight: 600;
   color: var(--text-muted); background: rgba(255,255,255,0.05);
   padding: 2px 7px; border-radius: 6px;
 }
+/* Push count + arrows to right side */
+.filter-label-text { flex: 1; }
 .filter-btn.active .filter-count { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
+
+/* Solo-highlighted filter (clicked for map isolation) */
+.filter-btn.solo {
+  background: rgba(255,255,255,0.08); border-color: var(--solo-color, var(--accent-cyan));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--solo-color, var(--accent-cyan)) 30%, transparent);
+  color: var(--text-primary);
+}
+.filter-btn.solo .filter-count { background: rgba(255,255,255,0.12); color: var(--text-primary); }
+
+/* Dim non-solo filters when a solo is active */
+.filter-section.has-solo .filter-btn:not(.solo) { opacity: 0.35; }
+.filter-section.has-solo .filter-btn:not(.solo):hover { opacity: 0.6; }
+
+/* Filter reorder animation */
+.filter-btn.reorder-move { transition: transform 0.2s ease; }
 
 .search-wrap { position: relative; margin-bottom: 20px; }
 
@@ -885,6 +915,7 @@ let stateGeoData = null;
 let filterDefs = {}; // { 'type:key': { fn, type, key } } — registry for dynamic count updates
 let activeKPI = null; // currently selected KPI key (or null)
 let mapColorMode = 'ownership'; // 'ownership' | 'status' | 'pipeline'
+let soloFilter = null; // { type: 'status'|'pipeline'|'ownership', key: string, color: string, fn: function } — single filter highlighting
 
 // Multi-select pipeline card state
 let selectedCards = new Set();
@@ -896,27 +927,48 @@ const activeFilters = { search: '', pipeline: new Set(), status: new Set(), stat
 
 const OWNERSHIP_COLORS = { "Mom 'n Pop": '#10b981', 'Private Equity': '#8b5cf6', 'Publicly Traded': '#3b82f6', 'Non-Profit': '#f59e0b', 'CLOSED': '#ef4444', 'GOV': '#64748b' };
 function getStatusColor(c) {
-  if (c.inPipeline) return '#ec4899';
-  if (c.notInterested) return '#ef4444';
-  if (c.assistedMeeting) return '#10b981';
-  if (c.scheduledIntro) return '#8b5cf6';
-  if (c.responded) return '#3b82f6';
+  // Use DOM order from outreachFilters for priority (top button wins)
+  const container = document.getElementById('outreachFilters');
+  if (container) {
+    const buttons = container.querySelectorAll('.filter-btn[data-filter-type="status"]');
+    for (const btn of buttons) {
+      const def = filterDefs['status:' + btn.dataset.filterKey];
+      if (def && def.fn(c)) return btn.dataset.filterColor || def.color || '#64748b';
+    }
+  }
+  // Fallback: not contacted
   if (c.msgsSent > 0) return '#f59e0b';
   return '#64748b';
 }
 function getPipelineColor(c) {
   if (!c.inPipeline || !c.pipelineStatus) return '#64748b';
-  if (c.pipelineStatus.startsWith('Active')) return '#10b981';
-  if (c.pipelineStatus === 'New Lead') return '#06b6d4';
-  if (c.pipelineStatus === 'Stand By') return '#f59e0b';
-  if (c.pipelineStatus === 'Stalled') return '#ef4444';
-  if (c.pipelineStatus.includes('Due Diligence') || c.pipelineStatus.includes('Placing Bid')) return '#8b5cf6';
+  // Use DOM order from pipelineFilters for priority
+  const container = document.getElementById('pipelineFilters');
+  if (container) {
+    const buttons = container.querySelectorAll('.filter-btn[data-filter-type="pipeline"]');
+    for (const btn of buttons) {
+      const def = filterDefs['pipeline:' + btn.dataset.filterKey];
+      if (def && def.fn(c)) return btn.dataset.filterColor || def.color || '#64748b';
+    }
+  }
   return '#64748b';
+}
+function getOwnershipColor(c) {
+  // Use DOM order from ownershipFilters for priority
+  const container = document.getElementById('ownershipFilters');
+  if (container) {
+    const buttons = container.querySelectorAll('.filter-btn[data-filter-type="ownership"]');
+    for (const btn of buttons) {
+      const def = filterDefs['ownership:' + btn.dataset.filterKey];
+      if (def && def.fn(c)) return btn.dataset.filterColor || def.color || '#64748b';
+    }
+  }
+  return OWNERSHIP_COLORS[c.ownership] || '#64748b';
 }
 function getMarkerColor(c) {
   if (mapColorMode === 'status') return getStatusColor(c);
   if (mapColorMode === 'pipeline') return getPipelineColor(c);
-  return OWNERSHIP_COLORS[c.ownership] || '#64748b';
+  return getOwnershipColor(c);
 }
 const PIPELINE_COLUMNS = [
   { key: 'Active', match: s => s.startsWith('Active'), color: 'var(--accent-green)', bg: 'rgba(16,185,129,0.1)' },
@@ -931,11 +983,16 @@ const PRIORITY_COLORS = { '1 - High': { bg: 'rgba(239,68,68,0.15)', color: '#ef4
 // INIT
 // ============================================================
 async function init() {
-  try { const resp = await fetch('data.json'); DATA = await resp.json(); } catch (e) { DATA = { companies: [], pipeline: [], actions: [], meta: {} }; }
+  try { const resp = await fetch('data.json'); DATA = await resp.json(); } catch (e) { console.error('Data load error:', e); DATA = { companies: [], pipeline: [], actions: [], meta: {} }; }
+  console.log('Data loaded:', DATA.companies.length, 'companies');
   initMap();
+  console.log('Map initialized');
   buildFilters();
+  console.log('Filters built, arrow buttons:', document.querySelectorAll('.reorder-arrow').length);
   applyFilters();
+  console.log('Filters applied');
   renderPipeline();
+  console.log('Init complete');
 }
 
 // ============================================================
@@ -1048,7 +1105,7 @@ function updateMap() {
 
   filteredData.forEach(c => {
     if (!c.lat || !c.lng) return;
-    const color = getMarkerColor(c);
+    let color = getMarkerColor(c);
     const size = c.inPipeline ? 16 : c.assistedMeeting ? 14 : c.scheduledIntro ? 12 : c.responded ? 10 : 7;
     const glow = c.inPipeline ? 16 : c.assistedMeeting ? 12 : 6;
 
@@ -1057,6 +1114,17 @@ function updateMap() {
     if (kpiMatchNames) {
       const isKPIMatch = (c.airtableId && kpiMatchIds.has(c.airtableId)) || kpiMatchNames.has(c.name);
       markerOpacity = isKPIMatch ? 1 : 0.1;
+    }
+
+    // Solo filter: if active, highlight matching companies in solo color, dim others
+    if (soloFilter) {
+      if (soloFilter.fn(c)) {
+        color = soloFilter.color;
+        markerOpacity = 1;
+      } else {
+        markerOpacity = 0.1;
+        color = '#64748b';
+      }
     }
 
     const icon = L.divIcon({
@@ -1197,13 +1265,15 @@ function buildFilters() {
   };
   pipelineStages.forEach(item => {
     const fn = pipelineFns[item.key] || (() => false);
-    filterDefs['pipeline:' + item.key] = { fn, type: 'pipeline', key: item.key };
-    const btn = document.createElement('button');
+    filterDefs['pipeline:' + item.key] = { fn, type: 'pipeline', key: item.key, color: item.color };
+    const btn = document.createElement('div');
     btn.className = 'filter-btn';
     btn.dataset.filterType = 'pipeline';
     btn.dataset.filterKey = item.key;
-    btn.innerHTML = `<span class="filter-dot" style="background:${item.color}"></span>${item.label}<span class="filter-count">${item.count}</span>`;
-    btn.addEventListener('click', () => {
+    btn.dataset.filterColor = item.color;
+    btn.innerHTML = `<span class="filter-dot" style="background:${item.color}"></span><span class="filter-label-text">${item.label}</span><span class="filter-count">${item.count}</span><span class="reorder-arrows"><button class="reorder-arrow" data-dir="up" title="Move up">&#9650;</button><button class="reorder-arrow" data-dir="down" title="Move down">&#9660;</button></span>`;
+    btn.addEventListener('click', (e) => {
+      if (e.target.closest('.reorder-arrow')) return;
       if (activeFilters.pipeline.has(item.key)) {
         activeFilters.pipeline.delete(item.key);
         btn.classList.remove('active');
@@ -1211,10 +1281,14 @@ function buildFilters() {
         activeFilters.pipeline.add(item.key);
         btn.classList.add('active');
       }
+      updateSoloFilter('pipeline');
       applyFilters();
     });
     pipeEl.appendChild(btn);
   });
+
+  // Wire up reorder arrows for pipeline
+  initReorderArrows(pipeEl, 'pipeline');
 
   // Outreach status filters (inclusive — a company with a meeting also counts as intro scheduled)
   const statuses = [
@@ -1254,15 +1328,20 @@ function buildFilters() {
 
 function renderFilterGroup(containerId, items, filterType, companies) {
   const el = document.getElementById(containerId);
+  const isSortable = { outreachFilters: 'status', pipelineFilters: 'pipeline', ownershipFilters: 'ownership' }[containerId];
+
   items.forEach(item => {
     const count = companies.filter(item.fn).length;
-    filterDefs[filterType + ':' + item.key] = { fn: item.fn, type: filterType, key: item.key };
-    const btn = document.createElement('button');
+    filterDefs[filterType + ':' + item.key] = { fn: item.fn, type: filterType, key: item.key, color: item.color };
+    const btn = document.createElement('div');
     btn.className = 'filter-btn';
     btn.dataset.filterType = filterType;
     btn.dataset.filterKey = item.key;
-    btn.innerHTML = `<span class="filter-dot" style="background:${item.color}"></span>${item.label}<span class="filter-count">${count}</span>`;
-    btn.addEventListener('click', () => {
+    btn.dataset.filterColor = item.color;
+    const arrowsHtml = isSortable ? '<span class="reorder-arrows"><button class="reorder-arrow" data-dir="up" title="Move up">&#9650;</button><button class="reorder-arrow" data-dir="down" title="Move down">&#9660;</button></span>' : '';
+    btn.innerHTML = `<span class="filter-dot" style="background:${item.color}"></span><span class="filter-label-text">${item.label}</span><span class="filter-count">${count}</span>${arrowsHtml}`;
+    btn.addEventListener('click', (e) => {
+      if (e.target.closest('.reorder-arrow')) return;
       if (activeFilters[filterType].has(item.key)) {
         activeFilters[filterType].delete(item.key);
         btn.classList.remove('active');
@@ -1270,10 +1349,93 @@ function renderFilterGroup(containerId, items, filterType, companies) {
         activeFilters[filterType].add(item.key);
         btn.classList.add('active');
       }
+      updateSoloFilter(filterType);
       applyFilters();
     });
     el.appendChild(btn);
   });
+
+  // Wire up reorder arrows for colorable sections
+  if (isSortable) {
+    initReorderArrows(el, isSortable);
+  }
+}
+
+// Reorder arrows: move filter buttons up/down to change color priority
+function initReorderArrows(container, colorMode) {
+  container.addEventListener('click', function(e) {
+    const arrowBtn = e.target.closest('.reorder-arrow');
+    if (!arrowBtn) return;
+    e.stopPropagation();
+
+    const filterBtn = arrowBtn.closest('.filter-btn');
+    if (!filterBtn) return;
+
+    const dir = arrowBtn.dataset.dir;
+    const siblings = [...container.querySelectorAll('.filter-btn')];
+    const idx = siblings.indexOf(filterBtn);
+
+    if (dir === 'up' && idx > 0) {
+      container.insertBefore(filterBtn, siblings[idx - 1]);
+    } else if (dir === 'down' && idx < siblings.length - 1) {
+      container.insertBefore(siblings[idx + 1], filterBtn);
+    } else {
+      return; // already at top/bottom
+    }
+
+    // Update map if this section controls colors
+    if (mapColorMode === colorMode) {
+      updateMap();
+      updateLegend();
+    }
+  });
+}
+
+// Determine solo filter state based on active filters in the current color-mode section
+// Sets state + CSS classes only; does NOT trigger re-render (caller should call applyFilters or updateMap)
+function updateSoloFilter(changedFilterType) {
+  // Map filter types to color modes
+  const typeToMode = { status: 'status', pipeline: 'pipeline', ownership: 'ownership' };
+  const mode = typeToMode[changedFilterType];
+
+  // Clear previous solo CSS
+  document.querySelectorAll('.filter-section.has-solo').forEach(s => s.classList.remove('has-solo'));
+  document.querySelectorAll('.filter-btn.solo').forEach(b => b.classList.remove('solo'));
+
+  // Only activate solo if this section controls map colors
+  if (mode && mapColorMode === mode) {
+    const activeInSection = [...activeFilters[changedFilterType]];
+    if (activeInSection.length === 1) {
+      const key = activeInSection[0];
+      const def = filterDefs[changedFilterType + ':' + key];
+      if (def) {
+        soloFilter = { type: changedFilterType, key: key, color: def.color, fn: def.fn };
+        // Add solo class and section flag
+        const section = document.getElementById(getSectionContainerId(changedFilterType)).closest('.filter-section');
+        if (section) section.classList.add('has-solo');
+        document.querySelectorAll(`.filter-btn[data-filter-type="${changedFilterType}"]`).forEach(btn => {
+          btn.classList.toggle('solo', btn.dataset.filterKey === key);
+          if (btn.dataset.filterKey === key) btn.style.setProperty('--solo-color', def.color);
+        });
+        return;
+      }
+    }
+  }
+
+  // Clear solo state
+  soloFilter = null;
+}
+
+function getSectionContainerId(filterType) {
+  const m = { status: 'outreachFilters', pipeline: 'pipelineFilters', ownership: 'ownershipFilters' };
+  return m[filterType] || filterType + 'Filters';
+}
+
+function clearSoloFilter() {
+  if (!soloFilter) return;
+  soloFilter = null;
+  document.querySelectorAll('.filter-section.has-solo').forEach(s => s.classList.remove('has-solo'));
+  document.querySelectorAll('.filter-btn.solo').forEach(b => b.classList.remove('solo'));
 }
 
 function applyFilters() {
@@ -2062,37 +2224,88 @@ function setMapColorMode(mode) {
   document.querySelectorAll('.color-mode-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.colorMode === mode);
   });
+  // Clear solo filter (don't trigger extra updateMap)
+  if (soloFilter) {
+    soloFilter = null;
+    document.querySelectorAll('.filter-section.has-solo').forEach(s => s.classList.remove('has-solo'));
+    document.querySelectorAll('.filter-btn.solo').forEach(b => b.classList.remove('solo'));
+  }
+  // Re-evaluate solo filter for the new mode's section
+  const modeToType = { status: 'status', pipeline: 'pipeline', ownership: 'ownership' };
+  const filterType = modeToType[mode];
+  if (filterType) {
+    const activeInSection = [...activeFilters[filterType]];
+    if (activeInSection.length === 1) {
+      const key = activeInSection[0];
+      const def = filterDefs[filterType + ':' + key];
+      if (def) {
+        soloFilter = { type: filterType, key: key, color: def.color, fn: def.fn };
+        const containerId = getSectionContainerId(filterType);
+        const section = document.getElementById(containerId).closest('.filter-section');
+        if (section) section.classList.add('has-solo');
+        document.querySelectorAll(`.filter-btn[data-filter-type="${filterType}"]`).forEach(btn => {
+          btn.classList.toggle('solo', btn.dataset.filterKey === key);
+          if (btn.dataset.filterKey === key) btn.style.setProperty('--solo-color', def.color);
+        });
+      }
+    }
+  }
   updateMap();
   updateLegend();
 }
 
 function updateLegend() {
   let items = '';
+
+  // If solo filter is active, show only that filter in the legend
+  if (soloFilter) {
+    const def = filterDefs[soloFilter.type + ':' + soloFilter.key];
+    const label = def ? (document.querySelector(`.filter-btn[data-filter-type="${soloFilter.type}"][data-filter-key="${soloFilter.key}"]`)?.textContent?.replace(/\d+$/, '').trim() || soloFilter.key) : soloFilter.key;
+    items = `<div class="legend-item"><span class="legend-dot" style="border-color:${soloFilter.color};background:${soloFilter.color}40"></span>${label}</div>` +
+            `<div class="legend-item"><span class="legend-dot" style="border-color:#64748b;background:#64748b40"></span>Other</div>`;
+    document.getElementById('mapLegend').innerHTML = items;
+    return;
+  }
+
   if (mapColorMode === 'ownership') {
-    items = Object.entries(OWNERSHIP_COLORS)
-      .filter(([k]) => filteredData.some(c => c.ownership === k))
-      .map(([key, color]) => `<div class="legend-item"><span class="legend-dot" style="border-color:${color};background:${color}40"></span>${key}</div>`).join('');
+    // Build legend from DOM order of ownership filter buttons
+    const container = document.getElementById('ownershipFilters');
+    if (container) {
+      const buttons = container.querySelectorAll('.filter-btn[data-filter-type="ownership"]');
+      buttons.forEach(btn => {
+        const color = btn.dataset.filterColor;
+        const label = btn.textContent.replace(/\d+$/, '').trim();
+        items += `<div class="legend-item"><span class="legend-dot" style="border-color:${color};background:${color}40"></span>${label}</div>`;
+      });
+    } else {
+      items = Object.entries(OWNERSHIP_COLORS)
+        .filter(([k]) => filteredData.some(c => c.ownership === k))
+        .map(([key, color]) => `<div class="legend-item"><span class="legend-dot" style="border-color:${color};background:${color}40"></span>${key}</div>`).join('');
+    }
   } else if (mapColorMode === 'status') {
-    const statusLegend = [
-      { label: 'In Pipeline', color: '#ec4899' },
-      { label: 'Not Interested', color: '#ef4444' },
-      { label: 'Assisted Meeting', color: '#10b981' },
-      { label: 'Intro Scheduled', color: '#8b5cf6' },
-      { label: 'Responded', color: '#3b82f6' },
-      { label: 'Contacted', color: '#f59e0b' },
-      { label: 'Not Contacted', color: '#64748b' },
-    ];
-    items = statusLegend.map(s => `<div class="legend-item"><span class="legend-dot" style="border-color:${s.color};background:${s.color}40"></span>${s.label}</div>`).join('');
+    // Build legend from DOM order of outreach filter buttons
+    const container = document.getElementById('outreachFilters');
+    if (container) {
+      const buttons = container.querySelectorAll('.filter-btn[data-filter-type="status"]');
+      buttons.forEach(btn => {
+        const color = btn.dataset.filterColor;
+        const label = btn.textContent.replace(/\d+$/, '').trim();
+        items += `<div class="legend-item"><span class="legend-dot" style="border-color:${color};background:${color}40"></span>${label}</div>`;
+      });
+      items += `<div class="legend-item"><span class="legend-dot" style="border-color:#64748b;background:#64748b40"></span>Not Contacted</div>`;
+    }
   } else if (mapColorMode === 'pipeline') {
-    const pipeLegend = [
-      { label: 'Active', color: '#10b981' },
-      { label: 'New Lead', color: '#06b6d4' },
-      { label: 'Stand By', color: '#f59e0b' },
-      { label: 'Stalled', color: '#ef4444' },
-      { label: 'Due Diligence', color: '#8b5cf6' },
-      { label: 'Not in Pipeline', color: '#64748b' },
-    ];
-    items = pipeLegend.map(s => `<div class="legend-item"><span class="legend-dot" style="border-color:${s.color};background:${s.color}40"></span>${s.label}</div>`).join('');
+    // Build legend from DOM order of pipeline filter buttons
+    const container = document.getElementById('pipelineFilters');
+    if (container) {
+      const buttons = container.querySelectorAll('.filter-btn[data-filter-type="pipeline"]');
+      buttons.forEach(btn => {
+        const color = btn.dataset.filterColor;
+        const label = btn.textContent.replace(/\d+$/, '').trim();
+        items += `<div class="legend-item"><span class="legend-dot" style="border-color:${color};background:${color}40"></span>${label}</div>`;
+      });
+      items += `<div class="legend-item"><span class="legend-dot" style="border-color:#64748b;background:#64748b40"></span>Not in Pipeline</div>`;
+    }
   }
   document.getElementById('mapLegend').innerHTML = items;
 }
