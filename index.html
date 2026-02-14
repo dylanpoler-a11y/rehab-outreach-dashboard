@@ -1944,6 +1944,7 @@ function buildFilters() {
     { key: 'not_interested', label: 'Not Interested', color: '#ef4444', fn: c => c.notInterested },
     { key: 'follow_up', label: 'Follow Up Later', color: '#f97316', fn: c => c.followUpLater },
     { key: 'overridden', label: 'Overridden (Bad Fit)', color: '#6b7280', fn: c => c.override },
+    { key: 'not_overridden', label: 'Not Overridden', color: '#22d3ee', fn: c => !c.override },
   ];
   renderFilterGroup('outreachFilters', statuses, 'status', companies);
 
@@ -2099,6 +2100,7 @@ function applyFilters() {
       if (activeFilters.status.has('not_interested') && c.notInterested) m = true;
       if (activeFilters.status.has('follow_up') && c.followUpLater) m = true;
       if (activeFilters.status.has('overridden') && c.override) m = true;
+      if (activeFilters.status.has('not_overridden') && !c.override) m = true;
       if (!m) return false;
     }
 
