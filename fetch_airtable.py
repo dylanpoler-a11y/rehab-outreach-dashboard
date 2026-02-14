@@ -329,13 +329,17 @@ def main():
             'bradfordFacility': bradford_facility,
         }
 
-    # Contact record ID -> list of company record IDs
+    # Contact record ID -> list of company record IDs + name
     contact_to_companies = {}
+    contact_names = {}
     for r in contacts_raw:
         f = r['fields']
         comp_ids = f.get('Companies', [])
         if comp_ids:
             contact_to_companies[r['id']] = comp_ids
+        name = f.get('Name', '')
+        if name:
+            contact_names[r['id']] = name
 
     # ============================================================
     # PROCESS COLD OUTREACH → per-company aggregation
@@ -431,10 +435,20 @@ def main():
             if meeting_date_str:
                 agg['meetingDate'] = meeting_date_str
 
+        # Resolve contact names and company names for this message
+        msg_contacts = [contact_names.get(cid, '') for cid in contact_ids if contact_names.get(cid)]
+        msg_companies = []
+        for comp_id in company_ids_for_msg:
+            c = company_by_id.get(comp_id)
+            if c:
+                msg_companies.append(c['fields'].get('Name', ''))
+
         all_messages.append({
             'date': date_str,
             'medium': medium,
             'account': account,
+            'contact': ', '.join(msg_contacts) if msg_contacts else '',
+            'company': ', '.join(msg_companies) if msg_companies else '',
         })
 
     # ============================================================

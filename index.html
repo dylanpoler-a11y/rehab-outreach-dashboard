@@ -899,6 +899,51 @@ body::before {
 }
 .daily-chart-bar-val { font-size: 8px; color: var(--text-secondary); font-weight: 600; }
 .daily-chart-empty { display: flex; align-items: center; justify-content: center; height: 180px; color: var(--text-muted); font-size: 13px; }
+.daily-chart-bar-wrap { cursor: pointer; }
+.daily-chart-bar-wrap.selected .daily-chart-bar {
+  background: linear-gradient(180deg, #f59e0b, #f97316);
+  box-shadow: 0 0 8px rgba(245,158,11,0.4);
+}
+
+/* Drill-down panel */
+.drilldown-panel {
+  margin-top: 12px; background: rgba(15,23,42,0.6); border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden; animation: fadeIn 0.2s ease;
+}
+.drilldown-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 16px; border-bottom: 1px solid var(--border);
+}
+.drilldown-title { font-size: 12px; font-weight: 700; color: var(--text-secondary); }
+.drilldown-close {
+  background: none; border: none; color: var(--text-muted); cursor: pointer;
+  font-size: 14px; padding: 2px 6px; border-radius: 4px; font-family: inherit;
+}
+.drilldown-close:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+.drilldown-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.drilldown-table th {
+  padding: 8px 12px; text-align: left; font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);
+  border-bottom: 1px solid var(--border); position: sticky; top: 0;
+  background: rgba(15,23,42,0.95);
+}
+.drilldown-table td {
+  padding: 6px 12px; border-bottom: 1px solid rgba(148,163,184,0.06);
+  color: var(--text-secondary);
+}
+.drilldown-table tr:hover td { background: rgba(255,255,255,0.02); }
+.drilldown-table-wrap { max-height: 240px; overflow-y: auto; }
+.drilldown-medium {
+  padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;
+  display: inline-block;
+}
+.drilldown-medium-call { background: rgba(59,130,246,0.15); color: #60a5fa; }
+.drilldown-medium-text { background: rgba(16,185,129,0.15); color: #34d399; }
+.drilldown-medium-vm { background: rgba(168,85,247,0.15); color: #c084fc; }
+.drilldown-medium-linkedin { background: rgba(59,130,246,0.15); color: #93c5fd; }
+.drilldown-medium-email { background: rgba(245,158,11,0.15); color: #fbbf24; }
+.drilldown-medium-default { background: rgba(148,163,184,0.1); color: var(--text-muted); }
+.drilldown-count { font-size: 11px; color: var(--text-muted); margin-left: 8px; }
 
 /* Table view */
 .table-container { display: none; padding: 0 24px 24px; overflow-x: auto; }
@@ -1152,6 +1197,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
           <div class="daily-outreach-summary" id="dailyOutreachSummary"></div>
           <div class="daily-outreach-chart" id="dailyOutreachChart"></div>
+          <div id="dailyDrilldown"></div>
         </div>
         <div class="chart-card animate-in">
           <div class="chart-title">Outreach Funnel</div>
@@ -4074,14 +4120,14 @@ function updateDailyOutreachChart() {
     filtered = messages.filter(m => dailyChannels.has(m.medium));
   }
 
-  // Parse all message dates upfront
+  // Parse all message dates upfront, keeping the original message reference
   const now = new Date();
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const parsed = [];
   filtered.forEach(m => {
     if (!m.date) return;
     const d = parseDateStr(m.date);
-    if (!isNaN(d.getTime())) parsed.push(d);
+    if (!isNaN(d.getTime())) parsed.push({ d, msg: m });
   });
 
   // Bucket helper: get the Monday of a date's week
@@ -4124,15 +4170,17 @@ function updateDailyOutreachChart() {
       break;
   }
 
-  // Aggregate into buckets
+  // Aggregate into buckets — track counts and messages
   const bucketMap = {};
+  const bucketMsgs = {};
   const bucketOrder = [];
   let totalInRange = 0;
-  parsed.forEach(d => {
+  parsed.forEach(({ d, msg }) => {
     if (startDate && d < startDate) return;
     const key = bucketFn(d);
-    if (!bucketMap[key]) { bucketMap[key] = 0; bucketOrder.push(key); }
+    if (!bucketMap[key]) { bucketMap[key] = 0; bucketMsgs[key] = []; bucketOrder.push(key); }
     bucketMap[key]++;
+    bucketMsgs[key].push(msg);
     totalInRange++;
   });
 
@@ -4166,7 +4214,7 @@ function updateDailyOutreachChart() {
   } else {
     // quarter — fill from earliest to latest
     if (bucketOrder.length > 0) {
-      const firstD = parsed.filter(d => !startDate || d >= startDate).sort((a,b) => a - b)[0];
+      const firstD = parsed.map(p => p.d).filter(d => !startDate || d >= startDate).sort((a,b) => a - b)[0];
       const startQ = Math.floor(firstD.getMonth() / 3);
       const startY = firstD.getFullYear();
       const endQ = Math.floor(now.getMonth() / 3);
@@ -4208,6 +4256,7 @@ function updateDailyOutreachChart() {
   `;
 
   // Render bars
+  document.getElementById('dailyDrilldown').innerHTML = '';
   if (entries.length === 0) {
     document.getElementById('dailyOutreachChart').innerHTML = '<div class="daily-chart-empty">No data in selected range</div>';
     return;
@@ -4227,16 +4276,82 @@ function updateDailyOutreachChart() {
           else if (bucketMode === 'month') { const [y, m] = e.key.split('-'); label = `${MONTHS[parseInt(m) - 1]}`; }
           else label = e.key; // Q1 2025
         }
-        const tooltip = `${formatBucketLabel(e.key)}: ${e.val} messages`;
+        const tooltip = `${formatBucketLabel(e.key)}: ${e.val} messages — click to drill down`;
         const barColor = e.val === 0 ? 'rgba(100,116,139,0.2)' : '';
         return `
-          <div class="daily-chart-bar-wrap" title="${tooltip}">
+          <div class="daily-chart-bar-wrap" data-key="${e.key}" title="${tooltip}">
             ${e.val > 0 ? `<div class="daily-chart-bar-val">${e.val}</div>` : ''}
             <div class="daily-chart-bar" style="height:${height}px;${barColor ? 'background:' + barColor : ''}"></div>
             <div class="daily-chart-bar-label">${label}</div>
           </div>
         `;
       }).join('')}
+    </div>
+  `;
+
+  // Wire bar click → drill-down
+  document.querySelectorAll('#dailyOutreachChart .daily-chart-bar-wrap').forEach(bar => {
+    bar.addEventListener('click', function() {
+      const key = this.dataset.key;
+      const msgs = bucketMsgs[key] || [];
+      if (msgs.length === 0) return;
+      // Toggle selection
+      const wasSelected = this.classList.contains('selected');
+      document.querySelectorAll('#dailyOutreachChart .daily-chart-bar-wrap').forEach(b => b.classList.remove('selected'));
+      if (wasSelected) {
+        document.getElementById('dailyDrilldown').innerHTML = '';
+        return;
+      }
+      this.classList.add('selected');
+      renderDrilldown(key, msgs, formatBucketLabel);
+    });
+  });
+}
+
+function getMediumClass(medium) {
+  const m = (medium || '').toLowerCase();
+  if (m.includes('call')) return 'drilldown-medium-call';
+  if (m.includes('text') || m.includes('sms')) return 'drilldown-medium-text';
+  if (m.includes('vm') || m.includes('voicemail')) return 'drilldown-medium-vm';
+  if (m.includes('linkedin')) return 'drilldown-medium-linkedin';
+  if (m.includes('email')) return 'drilldown-medium-email';
+  return 'drilldown-medium-default';
+}
+
+function renderDrilldown(key, msgs, formatBucketLabel) {
+  const title = formatBucketLabel(key);
+  // Sort by date descending
+  const sorted = [...msgs].sort((a, b) => {
+    const da = a.date ? parseDateStr(a.date).getTime() : 0;
+    const db = b.date ? parseDateStr(b.date).getTime() : 0;
+    return db - da;
+  });
+
+  const rows = sorted.map(m => {
+    const medClass = getMediumClass(m.medium);
+    return `<tr>
+      <td>${m.date || '-'}</td>
+      <td>${m.contact || '-'}</td>
+      <td>${m.company || '-'}</td>
+      <td><span class="drilldown-medium ${medClass}">${m.medium || '-'}</span></td>
+      <td>${m.account || '-'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('dailyDrilldown').innerHTML = `
+    <div class="drilldown-panel">
+      <div class="drilldown-header">
+        <span class="drilldown-title">${title}<span class="drilldown-count">${msgs.length} message${msgs.length !== 1 ? 's' : ''}</span></span>
+        <button class="drilldown-close" onclick="document.getElementById('dailyDrilldown').innerHTML=''; document.querySelectorAll('#dailyOutreachChart .selected').forEach(b=>b.classList.remove('selected'));">✕</button>
+      </div>
+      <div class="drilldown-table-wrap">
+        <table class="drilldown-table">
+          <thead><tr>
+            <th>Date</th><th>Contact</th><th>Company</th><th>Method</th><th>Account</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
     </div>
   `;
 }
