@@ -537,7 +537,9 @@ body::before {
 .deal-edit-header {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border);
+  cursor: grab; user-select: none;
 }
+.deal-edit-header:active { cursor: grabbing; }
 .deal-edit-title {
   font-size: 15px; font-weight: 700; color: var(--text-primary);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px;
@@ -1134,7 +1136,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <!-- Deal Edit Popover (singleton, repositioned per card) -->
 <div class="deal-edit-backdrop" id="dealEditBackdrop"></div>
 <div class="deal-edit-popover" id="dealEditPopover">
-  <div class="deal-edit-header">
+  <div class="deal-edit-header" id="dealEditHeader">
     <div class="deal-edit-title" id="dealEditTitle"></div>
     <button class="deal-edit-close" id="dealEditClose">&times;</button>
   </div>
@@ -3644,6 +3646,38 @@ function initDealEditPopover() {
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape' && document.getElementById('dealEditPopover').classList.contains('open')) {
       closeDealEditPopover();
+    }
+  });
+
+  // Draggable popover via header
+  const popover = document.getElementById('dealEditPopover');
+  const header = document.getElementById('dealEditHeader');
+  let dragOffsetX = 0, dragOffsetY = 0, isDraggingPopover = false;
+
+  header.addEventListener('mousedown', function(e) {
+    if (e.target.closest('.deal-edit-close')) return; // don't drag on close button
+    isDraggingPopover = true;
+    dragOffsetX = e.clientX - popover.getBoundingClientRect().left;
+    dragOffsetY = e.clientY - popover.getBoundingClientRect().top;
+    popover.style.transition = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', function(e) {
+    if (!isDraggingPopover) return;
+    let newLeft = e.clientX - dragOffsetX;
+    let newTop = e.clientY - dragOffsetY;
+    // Clamp to viewport
+    newLeft = Math.max(0, Math.min(newLeft, window.innerWidth - 60));
+    newTop = Math.max(0, Math.min(newTop, window.innerHeight - 60));
+    popover.style.left = newLeft + 'px';
+    popover.style.top = newTop + 'px';
+  });
+
+  document.addEventListener('mouseup', function() {
+    if (isDraggingPopover) {
+      isDraggingPopover = false;
+      popover.style.transition = '';
     }
   });
 }
