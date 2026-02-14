@@ -367,7 +367,8 @@ body::before {
 .donut-container { display: flex; align-items: center; gap: 32px; }
 .donut-svg { width: 160px; height: 160px; }
 .donut-legend { display: flex; flex-direction: column; gap: 8px; }
-.donut-legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+.donut-legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); transition: opacity 0.2s; }
+.donut-legend-item.dimmed { opacity: 0.3; }
 .donut-legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
 .donut-legend-value { margin-left: auto; font-weight: 700; color: var(--text-primary); }
 
@@ -3944,7 +3945,7 @@ function updateFunnel() {
   `}).join('');
 }
 
-function makeDonut(containerId, data, colors) {
+function makeDonut(containerId, data, colors, opts = {}) {
   const total = data.reduce((a, b) => a + b[1], 0) || 1;
   let cumAngle = 0;
   const segments = data.map(([key, val], i) => {
@@ -3954,6 +3955,10 @@ function makeDonut(containerId, data, colors) {
     return s;
   });
 
+  const clickable = opts.clickable || false;
+  const activeKeys = opts.activeKeys || new Set();
+  const hasActive = activeKeys.size > 0;
+
   const svgPaths = segments.map(s => {
     if (s.angle <= 0) return '';
     const r = 65, cx = 80, cy = 80;
@@ -3961,12 +3966,17 @@ function makeDonut(containerId, data, colors) {
     const endRad = (s.startAngle + s.angle - 90) * Math.PI / 180;
     const x1 = cx + r * Math.cos(startRad), y1 = cy + r * Math.sin(startRad);
     const x2 = cx + r * Math.cos(endRad), y2 = cy + r * Math.sin(endRad);
-    return `<path d="M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${s.angle > 180 ? 1 : 0} 1 ${x2} ${y2} Z" fill="${s.color}" opacity="0.85"/>`;
+    const dimmed = hasActive && !activeKeys.has(s.key);
+    const opacity = dimmed ? 0.2 : 0.85;
+    const cursor = clickable ? 'cursor:pointer;' : '';
+    return `<path data-key="${s.key}" d="M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${s.angle > 180 ? 1 : 0} 1 ${x2} ${y2} Z" fill="${s.color}" opacity="${opacity}" style="${cursor}"/>`;
   }).join('');
 
-  const legend = data.map(([key, val], i) => `
-    <div class="donut-legend-item"><span class="donut-legend-dot" style="background:${colors[i % colors.length]}"></span>${key || 'Unknown'}<span class="donut-legend-value">${val}</span></div>
-  `).join('');
+  const legend = data.map(([key, val], i) => {
+    const dimmed = hasActive && !activeKeys.has(key);
+    const cursor = clickable ? 'cursor:pointer;' : '';
+    return `<div class="donut-legend-item${dimmed ? ' dimmed' : ''}" data-key="${key}" style="${cursor}"><span class="donut-legend-dot" style="background:${colors[i % colors.length]}"></span>${key || 'Unknown'}<span class="donut-legend-value">${val}</span></div>`;
+  }).join('');
 
   document.getElementById(containerId).innerHTML = `
     <svg class="donut-svg" viewBox="0 0 160 160">
@@ -3981,10 +3991,38 @@ function makeDonut(containerId, data, colors) {
 
 function updateOwnershipDonut() {
   const counts = {};
-  filteredData.forEach(c => { const k = c.ownership || 'Unknown'; counts[k] = (counts[k] || 0) + 1; });
+  // Use ALL companies (not filteredData) so the donut shows everything, with active ones highlighted
+  DATA.companies.forEach(c => { const k = c.ownership || 'Unknown'; counts[k] = (counts[k] || 0) + 1; });
   const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
   const colors = entries.map(([k]) => OWNERSHIP_COLORS[k] || '#64748b');
-  makeDonut('ownershipDonut', entries, colors);
+  makeDonut('ownershipDonut', entries, colors, {
+    clickable: true,
+    activeKeys: activeFilters.ownership,
+  });
+
+  // Wire click handlers on donut segments and legend items
+  const container = document.getElementById('ownershipDonut');
+  container.querySelectorAll('[data-key]').forEach(el => {
+    el.addEventListener('click', function() {
+      const key = this.dataset.key;
+      if (activeFilters.ownership.has(key)) {
+        activeFilters.ownership.delete(key);
+      } else {
+        activeFilters.ownership.add(key);
+      }
+      // Sync the ownership filter bar buttons
+      syncOwnershipFilterBar();
+      updateSoloFilter('ownership');
+      applyFilters();
+    });
+  });
+}
+
+function syncOwnershipFilterBar() {
+  document.querySelectorAll('#ownershipFilters .filter-btn').forEach(btn => {
+    const key = btn.dataset.filterKey;
+    btn.classList.toggle('active', activeFilters.ownership.has(key));
+  });
 }
 
 function updateTierDonut() {
