@@ -1199,9 +1199,9 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="chart-title">Cold Outreach Volume</div>
             <div class="daily-outreach-controls">
               <div class="daily-outreach-filters" id="dailyRangeFilters">
-                <button class="daily-filter-btn active" data-range="daily">Daily</button>
+                <button class="daily-filter-btn" data-range="daily">Daily</button>
                 <button class="daily-filter-btn" data-range="weekly">Weekly</button>
-                <button class="daily-filter-btn" data-range="monthly">Monthly</button>
+                <button class="daily-filter-btn active" data-range="monthly">Monthly</button>
                 <button class="daily-filter-btn" data-range="quarterly">Quarterly</button>
               </div>
               <div class="daily-outreach-filters" id="dailyChannelFilters"></div>
@@ -4069,7 +4069,7 @@ function updateActivityChart() {
 // ============================================================
 // DAILY OUTREACH CHART
 // ============================================================
-let dailyRange = 'daily';
+let dailyRange = 'monthly';
 let dailyChannels = new Set(); // empty = all channels
 let chartHighlightCompanies = null; // Set of company names to highlight on map, null = no filter
 
@@ -4174,7 +4174,7 @@ function updateDailyOutreachChart() {
   let bucketFn, bucketMode;
   switch (dailyRange) {
     case 'daily':
-      startDate = new Date(now); startDate.setDate(startDate.getDate() - 14);
+      startDate = new Date(now); startDate.setDate(startDate.getDate() - 30);
       bucketFn = d => d.toISOString().split('T')[0];
       bucketMode = 'day';
       break;
