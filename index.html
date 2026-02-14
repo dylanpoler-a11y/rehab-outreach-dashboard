@@ -1507,8 +1507,11 @@ function initMap() {
     if (e.ctrlKey) {
       e.preventDefault();
       const delta = -e.deltaY;
-      const zoomDelta = delta > 0 ? 0.5 : -0.5;
-      map.zoomIn(zoomDelta, { animate: true });
+      if (delta > 0) {
+        map.zoomIn(0.5, { animate: true });
+      } else {
+        map.zoomOut(0.5, { animate: true });
+      }
     }
   }, { passive: false });
 
