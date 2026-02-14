@@ -733,6 +733,7 @@ def main():
         'companies': companies,
         'pipeline': pipeline,
         'actions': actions,
+        'messages': all_messages,
         'meta': {
             'totalMessages': len(all_messages),
             'mediumCounts': dict(medium_counts),

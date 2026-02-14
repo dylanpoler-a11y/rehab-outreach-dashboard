@@ -861,6 +861,45 @@ body::before {
 .activity-bar-label { font-size: 8px; color: var(--text-muted); transform: rotate(-45deg); white-space: nowrap; }
 .activity-bar-val { font-size: 9px; color: var(--text-secondary); font-weight: 600; }
 
+/* Daily outreach chart */
+.daily-outreach-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.daily-outreach-filters { display: flex; gap: 4px; flex-wrap: wrap; }
+.daily-filter-btn {
+  padding: 4px 12px; border-radius: 6px; font-size: 11px; font-weight: 600;
+  border: 1px solid var(--border); background: transparent; color: var(--text-muted);
+  cursor: pointer; transition: all 0.2s; font-family: inherit;
+}
+.daily-filter-btn:hover { border-color: var(--accent-blue); color: var(--text-secondary); }
+.daily-filter-btn.active { background: rgba(59,130,246,0.15); border-color: var(--accent-blue); color: var(--accent-blue); }
+.daily-filter-btn.channel-btn { font-size: 10px; padding: 3px 10px; }
+.daily-filter-btn.channel-btn.active { background: rgba(16,185,129,0.15); border-color: #10b981; color: #10b981; }
+.daily-outreach-summary {
+  display: flex; gap: 24px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.daily-summary-stat {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.daily-summary-val { font-size: 20px; font-weight: 800; color: var(--text-primary); }
+.daily-summary-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+.daily-outreach-chart { position: relative; height: 220px; }
+.daily-chart-bars { display: flex; align-items: flex-end; gap: 2px; height: 180px; padding: 0 4px; }
+.daily-chart-bar-wrap {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  height: 100%; justify-content: flex-end; min-width: 0;
+}
+.daily-chart-bar {
+  width: 100%; border-radius: 3px 3px 0 0; min-height: 2px;
+  background: linear-gradient(180deg, var(--accent-blue), var(--accent-cyan));
+  transition: height 0.3s ease, opacity 0.2s;
+}
+.daily-chart-bar:hover { opacity: 0.8; }
+.daily-chart-bar-label {
+  font-size: 8px; color: var(--text-muted); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; max-width: 100%; text-align: center;
+}
+.daily-chart-bar-val { font-size: 8px; color: var(--text-secondary); font-weight: 600; }
+.daily-chart-empty { display: flex; align-items: center; justify-content: center; height: 180px; color: var(--text-muted); font-size: 13px; }
+
 /* Table view */
 .table-container { display: none; padding: 0 24px 24px; overflow-x: auto; }
 
@@ -1098,6 +1137,23 @@ document.addEventListener('DOMContentLoaded', () => {
       <!-- Reporting Tab Panel -->
       <div class="tab-panel" id="panelReporting" data-panel="reporting">
         <div class="charts-section" id="chartsSection">
+        <div class="chart-card full-width animate-in" id="dailyOutreachCard">
+          <div class="chart-header">
+            <div class="chart-title">Daily Cold Outreach Volume</div>
+            <div class="daily-outreach-controls">
+              <div class="daily-outreach-filters" id="dailyRangeFilters">
+                <button class="daily-filter-btn active" data-range="week">Week</button>
+                <button class="daily-filter-btn" data-range="month">Month</button>
+                <button class="daily-filter-btn" data-range="quarter">Quarter</button>
+                <button class="daily-filter-btn" data-range="year">Year</button>
+                <button class="daily-filter-btn" data-range="all">All</button>
+              </div>
+              <div class="daily-outreach-filters" id="dailyChannelFilters"></div>
+            </div>
+          </div>
+          <div class="daily-outreach-summary" id="dailyOutreachSummary"></div>
+          <div class="daily-outreach-chart" id="dailyOutreachChart"></div>
+        </div>
         <div class="chart-card animate-in">
           <div class="chart-title">Outreach Funnel</div>
           <div class="funnel" id="funnelChart"></div>
@@ -3751,6 +3807,7 @@ function updateCharts() {
   updateAccountChart();
   updateTierDonut();
   updateActivityChart();
+  initDailyOutreachChart();
 }
 
 function updateFunnel() {
@@ -3938,6 +3995,197 @@ function updateActivityChart() {
       }).join('')}
     </div>
   `;
+}
+
+// ============================================================
+// DAILY OUTREACH CHART
+// ============================================================
+let dailyRange = 'week';
+let dailyChannels = new Set(); // empty = all channels
+
+function getDailyOutreachData() {
+  // Build per-message list from DATA.messages (new) or reconstruct from companies (legacy)
+  let messages = [];
+  if (DATA.messages && DATA.messages.length > 0) {
+    messages = DATA.messages.filter(m => m.date);
+  } else {
+    // Fallback: reconstruct from company-level data (no per-day granularity, only counts)
+    // We can at least use firstMsg/lastMsg dates + medium counts per company
+    // This is very approximate — better data comes once fetch_airtable.py re-runs
+    filteredData.forEach(c => {
+      if (c.byMedium) {
+        Object.entries(c.byMedium).forEach(([med, count]) => {
+          for (let i = 0; i < count; i++) {
+            messages.push({ date: c.lastMsg || c.firstMsg || '', medium: med, account: '' });
+          }
+        });
+      }
+    });
+  }
+  return messages;
+}
+
+function parseDateStr(dateStr) {
+  // Handle MM/DD/YYYY format
+  const mdy = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mdy) return new Date(parseInt(mdy[3]), parseInt(mdy[1]) - 1, parseInt(mdy[2]));
+  return new Date(dateStr);
+}
+
+function updateDailyOutreachChart() {
+  const messages = getDailyOutreachData();
+  if (messages.length === 0) {
+    document.getElementById('dailyOutreachChart').innerHTML = '<div class="daily-chart-empty">No outreach data available</div>';
+    document.getElementById('dailyOutreachSummary').innerHTML = '';
+    return;
+  }
+
+  // Determine available channels and build filter buttons
+  const allChannels = new Set();
+  messages.forEach(m => { if (m.medium) allChannels.add(m.medium); });
+  const channelContainer = document.getElementById('dailyChannelFilters');
+  const channelArr = [...allChannels].sort();
+  channelContainer.innerHTML = channelArr.map(ch =>
+    `<button class="daily-filter-btn channel-btn ${dailyChannels.size === 0 || dailyChannels.has(ch) ? 'active' : ''}" data-channel="${ch}">${ch}</button>`
+  ).join('');
+
+  // Wire channel filter clicks — click to toggle individual channels
+  channelContainer.querySelectorAll('.channel-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const ch = this.dataset.channel;
+      if (dailyChannels.size === 0) {
+        // All active — clicking one means "show only this one"
+        dailyChannels = new Set([ch]);
+      } else if (dailyChannels.has(ch) && dailyChannels.size === 1) {
+        // Only one active and clicking it — reset to all
+        dailyChannels = new Set();
+      } else if (dailyChannels.has(ch)) {
+        dailyChannels.delete(ch);
+      } else {
+        dailyChannels.add(ch);
+        if (dailyChannels.size === channelArr.length) dailyChannels = new Set(); // all = reset
+      }
+      updateDailyOutreachChart();
+    });
+  });
+
+  // Filter by channel
+  let filtered = messages;
+  if (dailyChannels.size > 0) {
+    filtered = messages.filter(m => dailyChannels.has(m.medium));
+  }
+
+  // Calculate date range
+  const now = new Date();
+  let startDate;
+  switch (dailyRange) {
+    case 'week': startDate = new Date(now); startDate.setDate(startDate.getDate() - 7); break;
+    case 'month': startDate = new Date(now); startDate.setMonth(startDate.getMonth() - 1); break;
+    case 'quarter': startDate = new Date(now); startDate.setMonth(startDate.getMonth() - 3); break;
+    case 'year': startDate = new Date(now); startDate.setFullYear(startDate.getFullYear() - 1); break;
+    default: startDate = null; // all time
+  }
+
+  // Filter by date range and aggregate by day
+  const dailyCounts = {};
+  let totalInRange = 0;
+  filtered.forEach(m => {
+    if (!m.date) return;
+    const d = parseDateStr(m.date);
+    if (isNaN(d.getTime())) return;
+    if (startDate && d < startDate) return;
+    // Format as YYYY-MM-DD for grouping
+    const key = d.toISOString().split('T')[0];
+    dailyCounts[key] = (dailyCounts[key] || 0) + 1;
+    totalInRange++;
+  });
+
+  // Fill in missing days in range
+  const dayKeys = [];
+  if (startDate) {
+    const cursor = new Date(startDate);
+    cursor.setHours(0, 0, 0, 0);
+    while (cursor <= now) {
+      dayKeys.push(cursor.toISOString().split('T')[0]);
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  } else {
+    // All time: use all existing keys sorted
+    const allKeys = Object.keys(dailyCounts).sort();
+    if (allKeys.length > 0) {
+      const cursor = new Date(allKeys[0]);
+      const end = new Date(allKeys[allKeys.length - 1]);
+      while (cursor <= end) {
+        dayKeys.push(cursor.toISOString().split('T')[0]);
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    }
+  }
+
+  const entries = dayKeys.map(k => ({ key: k, val: dailyCounts[k] || 0 }));
+
+  // Summary stats
+  const daysWithActivity = entries.filter(e => e.val > 0).length;
+  const avgPerDay = daysWithActivity > 0 ? (totalInRange / Math.max(entries.length, 1)).toFixed(1) : '0';
+  const maxDay = entries.reduce((mx, e) => e.val > mx.val ? e : mx, { key: '', val: 0 });
+  const maxDayLabel = maxDay.key ? formatDayLabel(maxDay.key, 'short') : '-';
+
+  document.getElementById('dailyOutreachSummary').innerHTML = `
+    <div class="daily-summary-stat"><span class="daily-summary-val">${totalInRange}</span><span class="daily-summary-label">Total in Period</span></div>
+    <div class="daily-summary-stat"><span class="daily-summary-val">${avgPerDay}</span><span class="daily-summary-label">Avg / Day</span></div>
+    <div class="daily-summary-stat"><span class="daily-summary-val">${daysWithActivity}</span><span class="daily-summary-label">Active Days</span></div>
+    <div class="daily-summary-stat"><span class="daily-summary-val">${maxDay.val}</span><span class="daily-summary-label">Peak (${maxDayLabel})</span></div>
+  `;
+
+  // Render bars
+  if (entries.length === 0) {
+    document.getElementById('dailyOutreachChart').innerHTML = '<div class="daily-chart-empty">No data in selected range</div>';
+    return;
+  }
+
+  const maxVal = Math.max(...entries.map(e => e.val), 1);
+  // For large ranges, show fewer labels
+  const showEvery = entries.length > 90 ? 14 : entries.length > 30 ? 7 : entries.length > 14 ? 2 : 1;
+
+  document.getElementById('dailyOutreachChart').innerHTML = `
+    <div class="daily-chart-bars">
+      ${entries.map((e, i) => {
+        const height = Math.max((e.val / maxVal) * 160, e.val > 0 ? 3 : 1);
+        const label = i % showEvery === 0 ? formatDayLabel(e.key, dailyRange === 'week' ? 'day' : 'short') : '';
+        const barColor = e.val === 0 ? 'rgba(100,116,139,0.2)' : '';
+        return `
+          <div class="daily-chart-bar-wrap" title="${formatDayLabel(e.key, 'full')}: ${e.val} messages">
+            ${e.val > 0 ? `<div class="daily-chart-bar-val">${e.val}</div>` : ''}
+            <div class="daily-chart-bar" style="height:${height}px;${barColor ? 'background:' + barColor : ''}"></div>
+            <div class="daily-chart-bar-label">${label}</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function formatDayLabel(isoKey, mode) {
+  const d = new Date(isoKey + 'T12:00:00');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  if (mode === 'day') return days[d.getDay()];
+  if (mode === 'short') return `${months[d.getMonth()]} ${d.getDate()}`;
+  return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+}
+
+function initDailyOutreachChart() {
+  // Wire range filter buttons
+  document.querySelectorAll('#dailyRangeFilters .daily-filter-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('#dailyRangeFilters .daily-filter-btn').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      dailyRange = this.dataset.range;
+      updateDailyOutreachChart();
+    });
+  });
+
+  updateDailyOutreachChart();
 }
 
 function setMapColorMode(mode) {
