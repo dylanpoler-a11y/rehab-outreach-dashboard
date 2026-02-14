@@ -3971,7 +3971,12 @@ function updateFunnel() {
         chartHighlightCompanies = null;
         chartHighlightMax = 0;
         updateMap();
+        document.getElementById('chartMapIndicator').innerHTML = '';
       } else {
+        // Clear any active chart bar selections first
+        document.querySelectorAll('#dailyOutreachChart .daily-chart-bar-wrap.selected').forEach(b => b.classList.remove('selected'));
+        document.getElementById('dailyDrilldown').innerHTML = '';
+
         funnelSelectedStep = stepKey;
 
         // Highlight on map — count messages per company
@@ -3983,6 +3988,24 @@ function updateFunnel() {
         chartHighlightMax = 0;
         companyCounts.forEach(v => { if (v > chartHighlightMax) chartHighlightMax = v; });
         updateMap();
+
+        // Fit map to highlighted companies
+        const highlightedLatLngs = step.companies.filter(c => c.lat && c.lng).map(c => [c.lat, c.lng]);
+        if (highlightedLatLngs.length === 1) {
+          map.setView(highlightedLatLngs[0], 8, { animate: true, duration: 0.5 });
+        } else if (highlightedLatLngs.length > 1) {
+          map.fitBounds(highlightedLatLngs, { padding: [60, 60], maxZoom: 10, animate: true, duration: 0.5 });
+        }
+
+        // Show map indicator
+        const compCount = companyCounts.size;
+        document.getElementById('chartMapIndicator').innerHTML = `
+          <div class="chart-map-indicator">
+            <span class="map-dot"></span>
+            Showing ${compCount} compan${compCount !== 1 ? 'ies' : 'y'} on map — ${step.label}
+            <button class="chart-map-clear" onclick="funnelSelectedStep=null;document.getElementById('funnelDrilldown').innerHTML='';chartHighlightCompanies=null;chartHighlightMax=0;updateMap();updateFunnelStepStates();document.getElementById('chartMapIndicator').innerHTML='';">Clear</button>
+          </div>
+        `;
 
         // Render drilldown
         renderFunnelDrilldown(step);
@@ -4081,7 +4104,7 @@ function renderFunnelDrilldown(step) {
     <div class="drilldown-panel">
       <div class="drilldown-header">
         <span class="drilldown-title">${step.label}<span class="drilldown-count">${step.companies.length} compan${step.companies.length !== 1 ? 'ies' : 'y'}</span></span>
-        <button class="drilldown-close" onclick="funnelSelectedStep=null;document.getElementById('funnelDrilldown').innerHTML='';chartHighlightCompanies=null;chartHighlightMax=0;updateMap();updateFunnelStepStates();">✕</button>
+        <button class="drilldown-close" onclick="funnelSelectedStep=null;document.getElementById('funnelDrilldown').innerHTML='';chartHighlightCompanies=null;chartHighlightMax=0;updateMap();updateFunnelStepStates();document.getElementById('chartMapIndicator').innerHTML='';">✕</button>
       </div>
       <div class="drilldown-table-wrap">
         <table class="drilldown-table">
