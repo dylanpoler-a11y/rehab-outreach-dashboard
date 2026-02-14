@@ -4234,9 +4234,9 @@ function makeBarChart(containerId, data, colors) {
 }
 
 function updateStateChart() {
-  // Use ALL data for the state chart so it doesn't collapse when filtered
+  // Use filteredData so state chart responds to ownership, sidebar, and all other filters
   const counts = {};
-  DATA.companies.forEach(c => {
+  filteredData.forEach(c => {
     const st = c.fullState || c.state;
     if (st && st !== '#ERROR!') counts[st] = (counts[st] || 0) + 1;
   });
