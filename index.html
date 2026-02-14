@@ -3976,6 +3976,48 @@ let funnelDateFrom = '';
 let funnelDateTo = '';
 let channelDateFrom = '';
 let channelDateTo = '';
+let channelSelectedBars = new Set(); // selected channel names for cross-filter
+
+// Cross-filter: get filtered companies excluding one chart's own filter
+// exclude: 'funnel' | 'channel' | 'state' | null
+function getCrossFilteredData(exclude) {
+  let data = filteredData;
+
+  // Funnel step filter
+  if (exclude !== 'funnel' && funnelSelectedStep && funnelSelectedStep !== 'total') {
+    const stepFilters = {
+      contacted: c => c.msgsSent > 0,
+      responded: c => c.responded,
+      scheduled: c => c.scheduledIntro,
+      assisted: c => c.assistedMeeting,
+      pipeline: c => c.inPipeline,
+    };
+    const fn = stepFilters[funnelSelectedStep];
+    if (fn) data = data.filter(fn);
+  }
+
+  // Channel filter
+  if (exclude !== 'channel' && channelSelectedBars.size > 0) {
+    data = data.filter(c => {
+      if (!c.byMedium) return false;
+      return [...channelSelectedBars].some(ch => c.byMedium[ch] > 0);
+    });
+  }
+
+  // State bar filter
+  if (exclude !== 'state' && stateSelectedBar) {
+    data = data.filter(c => (c.fullState || c.state) === stateSelectedBar);
+  }
+
+  return data;
+}
+
+// Refresh all three cross-filtered charts, excluding the caller
+function refreshCrossFilteredCharts(caller) {
+  if (caller !== 'funnel') updateFunnel();
+  if (caller !== 'channel') updateMediumChart();
+  if (caller !== 'state') updateStateChart();
+}
 
 function filterCompaniesByDateRange(companies, dateFrom, dateTo) {
   if (!dateFrom && !dateTo) return companies;
@@ -4057,7 +4099,7 @@ function initChannelDateRange() {
 }
 
 function updateFunnel() {
-  const d = filterCompaniesByDateRange(filteredData, funnelDateFrom, funnelDateTo);
+  const d = filterCompaniesByDateRange(getCrossFilteredData('funnel'), funnelDateFrom, funnelDateTo);
   const total = d.length;
   const contacted = d.filter(c => c.msgsSent > 0);
   const responded = d.filter(c => c.responded);
@@ -4138,7 +4180,7 @@ function updateFunnel() {
           <div class="chart-map-indicator">
             <span class="map-dot"></span>
             Showing ${compCount} compan${compCount !== 1 ? 'ies' : 'y'} on map — ${step.label}
-            <button class="chart-map-clear" onclick="funnelSelectedStep=null;document.getElementById('funnelDrilldown').innerHTML='';chartHighlightCompanies=null;chartHighlightMax=0;updateMap();updateFunnelStepStates();document.getElementById('chartMapIndicator').innerHTML='';">Clear</button>
+            <button class="chart-map-clear" onclick="funnelSelectedStep=null;document.getElementById('funnelDrilldown').innerHTML='';chartHighlightCompanies=null;chartHighlightMax=0;updateMap();updateFunnelStepStates();document.getElementById('chartMapIndicator').innerHTML='';refreshCrossFilteredCharts('funnel');">Clear</button>
           </div>
         `;
 
@@ -4148,6 +4190,8 @@ function updateFunnel() {
 
       // Re-render funnel bars to update selected/dimmed states
       updateFunnelStepStates();
+      // Cross-filter other charts
+      refreshCrossFilteredCharts('funnel');
     });
   });
 
@@ -4245,7 +4289,7 @@ function renderFunnelDrilldown(step) {
     <div class="drilldown-panel">
       <div class="drilldown-header">
         <span class="drilldown-title">${step.label}<span class="drilldown-count">${step.companies.length} compan${step.companies.length !== 1 ? 'ies' : 'y'}</span></span>
-        <button class="drilldown-close" onclick="funnelSelectedStep=null;document.getElementById('funnelDrilldown').innerHTML='';chartHighlightCompanies=null;chartHighlightMax=0;updateMap();updateFunnelStepStates();document.getElementById('chartMapIndicator').innerHTML='';">✕</button>
+        <button class="drilldown-close" onclick="funnelSelectedStep=null;document.getElementById('funnelDrilldown').innerHTML='';chartHighlightCompanies=null;chartHighlightMax=0;updateMap();updateFunnelStepStates();document.getElementById('chartMapIndicator').innerHTML='';refreshCrossFilteredCharts('funnel');">✕</button>
       </div>
       <div class="drilldown-table-wrap">
         <table class="drilldown-table">
@@ -4377,10 +4421,11 @@ function makeBarChart(containerId, data, colors) {
 let stateSelectedBar = null; // track which state bar is selected for drilldown
 
 function updateStateChart() {
-  // Use filteredData so state chart responds to ownership, sidebar, and all other filters
+  // Use cross-filtered data (excluding state's own filter to prevent self-collapse)
+  const crossData = getCrossFilteredData('state');
   const counts = {};
   const companiesByState = {};
-  filteredData.forEach(c => {
+  crossData.forEach(c => {
     const st = c.fullState || c.state;
     if (st && st !== '#ERROR!') {
       counts[st] = (counts[st] || 0) + 1;
@@ -4405,7 +4450,7 @@ function updateStateChart() {
     `;
   }).join('');
 
-  // Wire click handlers for drilldown
+  // Wire click handlers for drilldown + cross-filter
   document.querySelectorAll('#stateBarChart .bar-row').forEach(row => {
     row.addEventListener('click', function() {
       const stateName = this.dataset.state;
@@ -4419,6 +4464,7 @@ function updateStateChart() {
         document.querySelectorAll('#stateBarChart .bar-row').forEach(r => r.classList.toggle('active', r.dataset.state === stateName));
         renderStateDrilldown(stateName, companiesByState[stateName] || []);
       }
+      refreshCrossFilteredCharts('state');
     });
   });
 
@@ -4468,7 +4514,7 @@ function renderStateDrilldown(stateName, companies) {
     <div class="drilldown-panel">
       <div class="drilldown-header">
         <span class="drilldown-title">${stateName}<span class="drilldown-count">${companies.length} compan${companies.length !== 1 ? 'ies' : 'y'}</span></span>
-        <button class="drilldown-close" onclick="stateSelectedBar=null;document.getElementById('stateDrilldown').innerHTML='';document.querySelectorAll('#stateBarChart .bar-row').forEach(r=>r.classList.remove('active'));">✕</button>
+        <button class="drilldown-close" onclick="stateSelectedBar=null;document.getElementById('stateDrilldown').innerHTML='';document.querySelectorAll('#stateBarChart .bar-row').forEach(r=>r.classList.remove('active'));refreshCrossFilteredCharts('state');">✕</button>
       </div>
       <div class="drilldown-table-wrap">
         <table class="drilldown-table">
@@ -4511,21 +4557,48 @@ function clearStateFilter() {
 }
 
 function updateMediumChart() {
+  const crossData = getCrossFilteredData('channel');
   const counts = {};
   if (channelDateFrom || channelDateTo) {
-    // Use per-message data filtered by date range
     const allMsgs = getDailyOutreachData();
     const filtered = filterMessagesByDateRange(allMsgs, channelDateFrom, channelDateTo);
     filtered.forEach(m => { if (m.medium) counts[m.medium] = (counts[m.medium] || 0) + 1; });
   } else {
-    // Default: use company-level aggregated data
-    filteredData.forEach(c => {
+    crossData.forEach(c => {
       if (c.byMedium) Object.entries(c.byMedium).forEach(([k, v]) => { counts[k] = (counts[k] || 0) + v; });
     });
   }
   const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const maxVal = sorted.length > 0 ? Math.max(...sorted.map(d => d[1])) : 1;
   const colors = ['#06b6d4', '#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#f43f5e'];
-  makeBarChart('mediumBarChart', sorted, colors);
+
+  document.getElementById('mediumBarChart').innerHTML = sorted.map(([label, count], i) => {
+    const isSelected = channelSelectedBars.has(label);
+    return `
+      <div class="bar-row clickable ${isSelected ? 'active' : ''}" data-channel="${label.replace(/"/g, '&quot;')}">
+        <div class="bar-label" title="${label}">${label}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${(count/maxVal)*100}%;background:${colors[i % colors.length]}">${count > maxVal * 0.15 ? count : ''}</div></div>
+        <div class="bar-value">${count}</div>
+      </div>
+    `;
+  }).join('');
+
+  // Wire click handlers for cross-filtering
+  document.querySelectorAll('#mediumBarChart .bar-row').forEach(row => {
+    row.addEventListener('click', function() {
+      const channel = this.dataset.channel;
+      if (channelSelectedBars.has(channel)) {
+        channelSelectedBars.delete(channel);
+      } else {
+        channelSelectedBars.add(channel);
+      }
+      // Update visual state
+      document.querySelectorAll('#mediumBarChart .bar-row').forEach(r => {
+        r.classList.toggle('active', channelSelectedBars.has(r.dataset.channel));
+      });
+      refreshCrossFilteredCharts('channel');
+    });
+  });
 }
 
 function updateAccountChart() {
