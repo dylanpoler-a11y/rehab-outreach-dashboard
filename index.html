@@ -4174,7 +4174,7 @@ function wireDrilldownSort(tableEl, data, columns, renderRowFn) {
 
 function getFunnelStatusLabel(c) {
   if (c.inPipeline) return `<span class="drilldown-medium drilldown-medium-email">${c.pipelineStatus || 'Pipeline'}</span>`;
-  if (c.assistedMeeting) return '<span class="drilldown-medium drilldown-medium-vm">Meeting</span>';
+  if (c.assistedMeeting) return '<span class="drilldown-medium drilldown-medium-vm">Assisted Meeting</span>';
   if (c.scheduledIntro) return '<span class="drilldown-medium drilldown-medium-linkedin">Intro Scheduled</span>';
   if (c.responded) return '<span class="drilldown-medium drilldown-medium-text">Responded</span>';
   if (c.msgsSent > 0) return '<span class="drilldown-medium drilldown-medium-call">Contacted</span>';
@@ -4397,7 +4397,7 @@ function updateStateChart() {
 
 function getCompanyStatusLabel(c) {
   if (c.inPipeline) return `<span class="drilldown-medium drilldown-medium-email">${c.pipelineStatus || 'Pipeline'}</span>`;
-  if (c.assistedMeeting) return '<span class="drilldown-medium drilldown-medium-vm">Meeting</span>';
+  if (c.assistedMeeting) return '<span class="drilldown-medium drilldown-medium-vm">Assisted Meeting</span>';
   if (c.scheduledIntro) return '<span class="drilldown-medium drilldown-medium-linkedin">Intro Scheduled</span>';
   if (c.responded) return '<span class="drilldown-medium drilldown-medium-text">Responded</span>';
   if (c.msgsSent > 0) return '<span class="drilldown-medium drilldown-medium-call">Contacted</span>';
@@ -5101,7 +5101,7 @@ function updateTable() {
     </tr></thead><tbody>
       ${displayData.map(c => {
         const sc = c.inPipeline ? '#ec4899' : c.assistedMeeting ? '#10b981' : c.scheduledIntro ? '#8b5cf6' : c.responded ? '#3b82f6' : c.msgsSent > 0 ? '#f59e0b' : '#64748b';
-        const sl = c.notInterested ? 'Not Interested' : c.inPipeline ? 'Pipeline' : c.assistedMeeting ? 'Meeting' : c.scheduledIntro ? 'Intro' : c.responded ? 'Responded' : c.msgsSent > 0 ? 'Contacted' : 'None';
+        const sl = c.notInterested ? 'Not Interested' : c.inPipeline ? 'Pipeline' : c.assistedMeeting ? 'Assisted Meeting' : c.scheduledIntro ? 'Intro' : c.responded ? 'Responded' : c.msgsSent > 0 ? 'Contacted' : 'None';
         return `<tr>
           <td style="font-weight:600;color:var(--text-primary)">${c.bradfordFacility === 'Bradford OP Office' ? '<span style="color:#a855f7;margin-right:4px" title="Bradford OP Office">⭐</span>' : c.bradfordFacility ? '<span style="color:#fbbf24;margin-right:4px" title="Bradford Facility">⭐</span>' : ''}${c.website ? `<a href="${c.website}" target="_blank" style="color:var(--accent-blue);text-decoration:none">${c.name}</a>` : c.name}</td>
           <td>${c.fullState || c.state}</td>
