@@ -375,7 +375,11 @@ body::before {
 /* Funnel */
 .funnel { display: flex; flex-direction: column; gap: 4px; align-items: center; }
 .funnel-step { width: 100%; display: flex; align-items: center; gap: 12px; padding: 8px 0; }
-.funnel-bar { height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; color: white; transition: width 1s ease; min-width: 50px; }
+.funnel-bar { height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; color: white; transition: width 1s ease; min-width: 50px; cursor: pointer; }
+.funnel-bar:hover { filter: brightness(1.2); }
+.funnel-step.selected .funnel-bar { box-shadow: 0 0 12px rgba(255,255,255,0.3); filter: brightness(1.15); }
+.funnel-step.dimmed .funnel-bar { opacity: 0.3; }
+.funnel-step.dimmed .funnel-info { opacity: 0.3; }
 .funnel-info { display: flex; flex-direction: column; gap: 2px; }
 .funnel-label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .funnel-pct { font-size: 11px; color: var(--text-muted); }
@@ -1241,6 +1245,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="chart-card animate-in">
           <div class="chart-title">Outreach Funnel</div>
           <div class="funnel" id="funnelChart"></div>
+          <div id="funnelDrilldown"></div>
         </div>
         <div class="chart-card animate-in">
           <div class="chart-title">Ownership Breakdown</div>
@@ -3912,37 +3917,139 @@ function updateCharts() {
   initDailyOutreachChart();
 }
 
+let funnelSelectedStep = null; // track which step is selected
+
 function updateFunnel() {
   const d = filteredData;
   const total = d.length;
-  const contacted = d.filter(c => c.msgsSent > 0).length;
-  const responded = d.filter(c => c.responded).length;
-  const scheduled = d.filter(c => c.scheduledIntro).length;
-  const assisted = d.filter(c => c.assistedMeeting).length;
-  const pipeline = d.filter(c => c.inPipeline).length;
+  const contacted = d.filter(c => c.msgsSent > 0);
+  const responded = d.filter(c => c.responded);
+  const scheduled = d.filter(c => c.scheduledIntro);
+  const assisted = d.filter(c => c.assistedMeeting);
+  const pipeline = d.filter(c => c.inPipeline);
 
   const steps = [
-    { label: 'Total Companies', value: total, color: 'var(--accent-blue)', pct: '100%' },
-    { label: 'Contacted', value: contacted, color: 'var(--accent-cyan)', pct: total > 0 ? ((contacted/total)*100).toFixed(1)+'%' : '0%' },
-    { label: 'Responded', value: responded, color: 'var(--accent-green)', pct: contacted > 0 ? ((responded/contacted)*100).toFixed(1)+'% of contacted' : '0%' },
-    { label: 'Intro Scheduled', value: scheduled, color: 'var(--accent-purple)', pct: responded > 0 ? ((scheduled/responded)*100).toFixed(1)+'% of responded' : '0%' },
-    { label: 'Assisted Meeting', value: assisted, color: 'var(--accent-orange)', pct: scheduled > 0 ? ((assisted/scheduled)*100).toFixed(1)+'% of scheduled' : '0%' },
-    { label: 'In Pipeline', value: pipeline, color: 'var(--accent-pink)', pct: assisted > 0 ? ((pipeline/assisted)*100).toFixed(1)+'% of meetings' : '0%' },
+    { key: 'total', label: 'Total Companies', companies: d, color: 'var(--accent-blue)', pct: '100%' },
+    { key: 'contacted', label: 'Contacted', companies: contacted, color: 'var(--accent-cyan)', pct: total > 0 ? ((contacted.length/total)*100).toFixed(1)+'%' : '0%' },
+    { key: 'responded', label: 'Responded', companies: responded, color: 'var(--accent-green)', pct: contacted.length > 0 ? ((responded.length/contacted.length)*100).toFixed(1)+'% of contacted' : '0%' },
+    { key: 'scheduled', label: 'Intro Scheduled', companies: scheduled, color: 'var(--accent-purple)', pct: responded.length > 0 ? ((scheduled.length/responded.length)*100).toFixed(1)+'% of responded' : '0%' },
+    { key: 'assisted', label: 'Assisted Meeting', companies: assisted, color: 'var(--accent-orange)', pct: scheduled.length > 0 ? ((assisted.length/scheduled.length)*100).toFixed(1)+'% of scheduled' : '0%' },
+    { key: 'pipeline', label: 'In Pipeline', companies: pipeline, color: 'var(--accent-pink)', pct: assisted.length > 0 ? ((pipeline.length/assisted.length)*100).toFixed(1)+'% of meetings' : '0%' },
   ];
-  // Each bar width is relative to Total Companies (first step), guaranteeing funnel shape
+
+  // Store for drilldown access
+  window._funnelSteps = steps;
+
   const baseVal = Math.max(total, 1);
   document.getElementById('funnelChart').innerHTML = steps.map((s, i) => {
-    // Ensure funnel tapers: width is the smaller of the proportional value or the max for its tier
-    // Each tier caps at (100 - i*8)% so even equal values still taper
-    const proportional = (s.value / baseVal) * 100;
+    const proportional = (s.companies.length / baseVal) * 100;
     const maxForTier = 100 - i * 6;
     const width = Math.max(Math.min(proportional, maxForTier), 8);
+    const selectedClass = funnelSelectedStep === s.key ? ' selected' : (funnelSelectedStep ? ' dimmed' : '');
     return `
-    <div class="funnel-step">
-      <div class="funnel-bar" style="width:${width}%;background:${s.color}">${s.value}</div>
+    <div class="funnel-step${selectedClass}" data-step="${s.key}">
+      <div class="funnel-bar" style="width:${width}%;background:${s.color}">${s.companies.length}</div>
       <div class="funnel-info"><div class="funnel-label">${s.label}</div><div class="funnel-pct">${s.pct}</div></div>
     </div>
   `}).join('');
+
+  // Wire click handlers
+  document.querySelectorAll('#funnelChart .funnel-step').forEach(el => {
+    el.addEventListener('click', function() {
+      const stepKey = this.dataset.step;
+      const step = steps.find(s => s.key === stepKey);
+      if (!step || step.companies.length === 0) return;
+
+      if (funnelSelectedStep === stepKey) {
+        // Deselect
+        funnelSelectedStep = null;
+        document.getElementById('funnelDrilldown').innerHTML = '';
+        chartHighlightCompanies = null;
+        chartHighlightMax = 0;
+        updateMap();
+      } else {
+        funnelSelectedStep = stepKey;
+
+        // Highlight on map — count messages per company
+        const companyCounts = new Map();
+        step.companies.forEach(c => {
+          companyCounts.set(c.name, c.msgsSent || 0);
+        });
+        chartHighlightCompanies = companyCounts.size > 0 ? companyCounts : null;
+        chartHighlightMax = 0;
+        companyCounts.forEach(v => { if (v > chartHighlightMax) chartHighlightMax = v; });
+        updateMap();
+
+        // Render drilldown
+        renderFunnelDrilldown(step);
+      }
+
+      // Re-render funnel bars to update selected/dimmed states
+      updateFunnelStepStates();
+    });
+  });
+
+  // Restore drilldown if step was previously selected
+  if (funnelSelectedStep) {
+    const step = steps.find(s => s.key === funnelSelectedStep);
+    if (step && step.companies.length > 0) {
+      renderFunnelDrilldown(step);
+    } else {
+      funnelSelectedStep = null;
+      document.getElementById('funnelDrilldown').innerHTML = '';
+    }
+  }
+}
+
+function updateFunnelStepStates() {
+  document.querySelectorAll('#funnelChart .funnel-step').forEach(el => {
+    el.classList.remove('selected', 'dimmed');
+    if (funnelSelectedStep) {
+      if (el.dataset.step === funnelSelectedStep) {
+        el.classList.add('selected');
+      } else {
+        el.classList.add('dimmed');
+      }
+    }
+  });
+}
+
+function renderFunnelDrilldown(step) {
+  const sorted = [...step.companies].sort((a, b) => (b.msgsSent || 0) - (a.msgsSent || 0));
+
+  function getStatusLabel(c) {
+    if (c.inPipeline) return `<span class="drilldown-medium drilldown-medium-email">${c.pipelineStatus || 'Pipeline'}</span>`;
+    if (c.assistedMeeting) return '<span class="drilldown-medium drilldown-medium-vm">Meeting</span>';
+    if (c.scheduledIntro) return '<span class="drilldown-medium drilldown-medium-linkedin">Intro Scheduled</span>';
+    if (c.responded) return '<span class="drilldown-medium drilldown-medium-text">Responded</span>';
+    if (c.msgsSent > 0) return '<span class="drilldown-medium drilldown-medium-call">Contacted</span>';
+    return '<span class="drilldown-medium drilldown-medium-default">Not Contacted</span>';
+  }
+
+  const rows = sorted.map(c => `<tr>
+    <td>${c.name || '-'}</td>
+    <td>${c.fullState || c.state || '-'}</td>
+    <td>${c.ownership || '-'}</td>
+    <td>${c.msgsSent || 0}</td>
+    <td>${getStatusLabel(c)}</td>
+  </tr>`).join('');
+
+  document.getElementById('funnelDrilldown').innerHTML = `
+    <div class="drilldown-panel">
+      <div class="drilldown-header">
+        <span class="drilldown-title">${step.label}<span class="drilldown-count">${step.companies.length} compan${step.companies.length !== 1 ? 'ies' : 'y'}</span></span>
+        <button class="drilldown-close" onclick="funnelSelectedStep=null;document.getElementById('funnelDrilldown').innerHTML='';chartHighlightCompanies=null;chartHighlightMax=0;updateMap();updateFunnelStepStates();">✕</button>
+      </div>
+      <div class="drilldown-table-wrap">
+        <table class="drilldown-table">
+          <thead><tr>
+            <th>Company</th><th>State</th><th>Ownership</th><th>Msgs Sent</th><th>Status</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
 }
 
 function makeDonut(containerId, data, colors, opts = {}) {
