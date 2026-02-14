@@ -872,6 +872,24 @@ body::before {
 }
 .daily-filter-btn:hover { border-color: var(--accent-blue); color: var(--text-secondary); }
 .daily-filter-btn.active { background: rgba(59,130,246,0.15); border-color: var(--accent-blue); color: var(--accent-blue); }
+.daily-date-range {
+  display: flex; align-items: center; gap: 4px;
+}
+.daily-date-input {
+  background: var(--bg-glass); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text-secondary); font-size: 11px; padding: 4px 8px; font-family: inherit;
+  color-scheme: dark; cursor: pointer; width: 120px;
+}
+.daily-date-input:focus { border-color: var(--accent-blue); outline: none; }
+.daily-date-input.active { border-color: var(--accent-blue); background: rgba(59,130,246,0.08); }
+.daily-date-sep { color: var(--text-muted); font-size: 11px; }
+.daily-date-clear {
+  background: none; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text-muted); font-size: 10px; padding: 3px 6px; cursor: pointer;
+  font-family: inherit; display: none;
+}
+.daily-date-clear:hover { color: var(--text-primary); border-color: var(--text-muted); }
+.daily-date-clear.visible { display: inline-block; }
 .daily-filter-btn.channel-btn { font-size: 10px; padding: 3px 10px; }
 .daily-filter-btn.channel-btn.active { background: rgba(16,185,129,0.15); border-color: #10b981; color: #10b981; }
 .daily-outreach-summary {
@@ -1204,6 +1222,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button class="daily-filter-btn" data-range="weekly">Weekly</button>
                 <button class="daily-filter-btn active" data-range="monthly">Monthly</button>
                 <button class="daily-filter-btn" data-range="quarterly">Quarterly</button>
+              </div>
+              <div class="daily-date-range" id="dailyDateRange">
+                <input type="date" class="daily-date-input" id="dailyDateFrom" title="From date">
+                <span class="daily-date-sep">–</span>
+                <input type="date" class="daily-date-input" id="dailyDateTo" title="To date">
+                <button class="daily-date-clear" id="dailyDateClear" title="Clear custom range">✕</button>
               </div>
               <div class="daily-outreach-filters" id="dailyChannelFilters"></div>
             </div>
@@ -4073,6 +4097,8 @@ function updateActivityChart() {
 let dailyRange = 'monthly';
 let dailyChannels = new Set(); // empty = all channels
 let chartHighlightCompanies = null; // Set of company names to highlight on map, null = no filter
+let customDateFrom = ''; // YYYY-MM-DD, empty = use default range
+let customDateTo = '';   // YYYY-MM-DD, empty = use default range
 
 function getDailyOutreachData() {
   // Build per-message list from DATA.messages (new) or reconstruct from companies (legacy)
@@ -4171,7 +4197,7 @@ function updateDailyOutreachChart() {
   }
 
   // Determine date range and bucket function
-  let startDate;
+  let startDate, endDate;
   let bucketFn, bucketMode;
   switch (dailyRange) {
     case 'daily':
@@ -4196,6 +4222,16 @@ function updateDailyOutreachChart() {
       break;
   }
 
+  // Override with custom date range if set
+  if (customDateFrom) {
+    startDate = new Date(customDateFrom + 'T00:00:00');
+  }
+  if (customDateTo) {
+    endDate = new Date(customDateTo + 'T23:59:59');
+  } else {
+    endDate = now;
+  }
+
   // Aggregate into buckets — track counts and messages
   const bucketMap = {};
   const bucketMsgs = {};
@@ -4203,6 +4239,7 @@ function updateDailyOutreachChart() {
   let totalInRange = 0;
   parsed.forEach(({ d, msg }) => {
     if (startDate && d < startDate) return;
+    if (endDate && d > endDate) return;
     const key = bucketFn(d);
     if (!bucketMap[key]) { bucketMap[key] = 0; bucketMsgs[key] = []; bucketOrder.push(key); }
     bucketMap[key]++;
@@ -4214,7 +4251,7 @@ function updateDailyOutreachChart() {
   let entries = [];
   if (bucketMode === 'day') {
     const cursor = new Date(startDate); cursor.setHours(0,0,0,0);
-    while (cursor <= now) {
+    while (cursor <= endDate) {
       const k = cursor.toISOString().split('T')[0];
       entries.push({ key: k, val: bucketMap[k] || 0 });
       cursor.setDate(cursor.getDate() + 1);
@@ -4224,14 +4261,14 @@ function updateDailyOutreachChart() {
     // Advance to Monday
     const day = cursor.getDay();
     cursor.setDate(cursor.getDate() - day + (day === 0 ? -6 : 1));
-    while (cursor <= now) {
+    while (cursor <= endDate) {
       const k = cursor.toISOString().split('T')[0];
       entries.push({ key: k, val: bucketMap[k] || 0 });
       cursor.setDate(cursor.getDate() + 7);
     }
   } else if (bucketMode === 'month') {
     const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-    const endMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
     while (cursor <= endMonth) {
       const k = cursor.toISOString().split('T')[0].slice(0, 7);
       entries.push({ key: k, val: bucketMap[k] || 0 });
@@ -4240,11 +4277,11 @@ function updateDailyOutreachChart() {
   } else {
     // quarter — fill from earliest to latest
     if (bucketOrder.length > 0) {
-      const firstD = parsed.map(p => p.d).filter(d => !startDate || d >= startDate).sort((a,b) => a - b)[0];
+      const firstD = parsed.map(p => p.d).filter(d => (!startDate || d >= startDate) && (!endDate || d <= endDate)).sort((a,b) => a - b)[0];
       const startQ = Math.floor(firstD.getMonth() / 3);
       const startY = firstD.getFullYear();
-      const endQ = Math.floor(now.getMonth() / 3);
-      const endY = now.getFullYear();
+      const endQ = Math.floor(endDate.getMonth() / 3);
+      const endY = endDate.getFullYear();
       let cy = startY, cq = startQ;
       while (cy < endY || (cy === endY && cq <= endQ)) {
         const k = `Q${cq + 1} ${cy}`;
@@ -4461,6 +4498,36 @@ function initDailyOutreachChart() {
       clearChartMapHighlight();
       updateDailyOutreachChart();
     });
+  });
+
+  // Wire custom date range inputs
+  const fromInput = document.getElementById('dailyDateFrom');
+  const toInput = document.getElementById('dailyDateTo');
+  const clearBtn = document.getElementById('dailyDateClear');
+
+  function onDateChange() {
+    customDateFrom = fromInput.value || '';
+    customDateTo = toInput.value || '';
+    fromInput.classList.toggle('active', !!customDateFrom);
+    toInput.classList.toggle('active', !!customDateTo);
+    clearBtn.classList.toggle('visible', !!(customDateFrom || customDateTo));
+    clearChartMapHighlight();
+    updateDailyOutreachChart();
+  }
+
+  fromInput.addEventListener('change', onDateChange);
+  toInput.addEventListener('change', onDateChange);
+
+  clearBtn.addEventListener('click', function() {
+    customDateFrom = '';
+    customDateTo = '';
+    fromInput.value = '';
+    toInput.value = '';
+    fromInput.classList.remove('active');
+    toInput.classList.remove('active');
+    clearBtn.classList.remove('visible');
+    clearChartMapHighlight();
+    updateDailyOutreachChart();
   });
 
   updateDailyOutreachChart();
