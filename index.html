@@ -3928,13 +3928,20 @@ function updateFunnel() {
     { label: 'Assisted Meeting', value: assisted, color: 'var(--accent-orange)', pct: scheduled > 0 ? ((assisted/scheduled)*100).toFixed(1)+'% of scheduled' : '0%' },
     { label: 'In Pipeline', value: pipeline, color: 'var(--accent-pink)', pct: assisted > 0 ? ((pipeline/assisted)*100).toFixed(1)+'% of meetings' : '0%' },
   ];
-  const maxVal = Math.max(...steps.map(s => s.value), 1);
-  document.getElementById('funnelChart').innerHTML = steps.map(s => `
+  // Each bar width is relative to Total Companies (first step), guaranteeing funnel shape
+  const baseVal = Math.max(total, 1);
+  document.getElementById('funnelChart').innerHTML = steps.map((s, i) => {
+    // Ensure funnel tapers: width is the smaller of the proportional value or the max for its tier
+    // Each tier caps at (100 - i*8)% so even equal values still taper
+    const proportional = (s.value / baseVal) * 100;
+    const maxForTier = 100 - i * 6;
+    const width = Math.max(Math.min(proportional, maxForTier), 8);
+    return `
     <div class="funnel-step">
-      <div class="funnel-bar" style="width:${Math.max((s.value/maxVal)*100, 10)}%;background:${s.color}">${s.value}</div>
+      <div class="funnel-bar" style="width:${width}%;background:${s.color}">${s.value}</div>
       <div class="funnel-info"><div class="funnel-label">${s.label}</div><div class="funnel-pct">${s.pct}</div></div>
     </div>
-  `).join('');
+  `}).join('');
 }
 
 function makeDonut(containerId, data, colors) {
