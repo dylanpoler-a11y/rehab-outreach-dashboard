@@ -1645,22 +1645,29 @@ function updateMap() {
       }
     }
 
-    // Chart highlight: dim markers not in selected chart bars
+    // Chart highlight: dim non-matching, scale matching by msg count
+    let chartSize = null; // null = use default size
     if (chartHighlightCompanies) {
-      const isMatch = chartHighlightCompanies.has(c.name);
-      if (!isMatch) {
+      const msgCount = chartHighlightCompanies.get(c.name) || 0;
+      if (msgCount === 0) {
         markerOpacity = 0.08;
         color = '#64748b';
       } else {
         markerOpacity = 1;
+        // Scale size: min 8px, max 28px based on count relative to max
+        const ratio = chartHighlightMax > 1 ? msgCount / chartHighlightMax : 1;
+        chartSize = Math.round(8 + ratio * 20);
       }
     }
+
+    const finalSize = chartSize || size;
+    const finalGlow = chartSize ? Math.round(finalSize * 0.8) : glow;
 
     let icon;
     if (c.bradfordFacility) {
       // Bradford: gold star for Facility, purple star for OP Office
       const isOP = c.bradfordFacility === 'Bradford OP Office';
-      const bfSize = isOP ? 16 : 20;
+      const bfSize = chartSize || (isOP ? 16 : 20);
       const bfColor = isOP ? '#a855f7' : '#fbbf24';
       const bfClass = isOP ? 'bf-purple' : 'bf-gold';
       icon = L.divIcon({
@@ -1677,8 +1684,8 @@ function updateMap() {
     } else {
       icon = L.divIcon({
         className: 'custom-marker',
-        html: `<div style="width:${size}px;height:${size}px;background:${color};border-radius:50%;border:2px solid rgba(255,255,255,${c.inPipeline ? 0.8 : 0.4});box-shadow:0 0 ${glow}px ${color}80;transition:opacity 0.3s;opacity:${markerOpacity};"></div>`,
-        iconSize: [size, size], iconAnchor: [size/2, size/2]
+        html: `<div style="width:${finalSize}px;height:${finalSize}px;background:${color};border-radius:50%;border:2px solid rgba(255,255,255,${c.inPipeline ? 0.8 : 0.4});box-shadow:0 0 ${finalGlow}px ${color}80;transition:all 0.3s;opacity:${markerOpacity};"></div>`,
+        iconSize: [finalSize, finalSize], iconAnchor: [finalSize/2, finalSize/2]
       });
     }
 
@@ -4096,7 +4103,8 @@ function updateActivityChart() {
 // ============================================================
 let dailyRange = 'monthly';
 let dailyChannels = new Set(); // empty = all channels
-let chartHighlightCompanies = null; // Set of company names to highlight on map, null = no filter
+let chartHighlightCompanies = null; // Map of company name → msg count, null = no filter
+let chartHighlightMax = 0; // max msg count across highlighted companies
 let customDateFrom = ''; // YYYY-MM-DD, empty = use default range
 let customDateTo = '';   // YYYY-MM-DD, empty = use default range
 
@@ -4392,16 +4400,22 @@ function updateDailyOutreachChart() {
         return;
       }
 
-      // Update map highlighting
-      const companies = new Set();
+      // Update map highlighting — count messages per company
+      const companyCounts = new Map();
       allSelectedMsgs.forEach(m => {
-        if (m.company) m.company.split(', ').forEach(c => { if (c) companies.add(c); });
+        if (m.company) m.company.split(', ').forEach(c => {
+          if (c) companyCounts.set(c, (companyCounts.get(c) || 0) + 1);
+        });
       });
-      chartHighlightCompanies = companies.size > 0 ? companies : null;
+      chartHighlightCompanies = companyCounts.size > 0 ? companyCounts : null;
+      chartHighlightMax = 0;
+      if (companyCounts.size > 0) {
+        companyCounts.forEach(v => { if (v > chartHighlightMax) chartHighlightMax = v; });
+      }
       updateMap();
 
       // Show map indicator
-      const compCount = companies.size;
+      const compCount = companyCounts.size;
       document.getElementById('chartMapIndicator').innerHTML = `
         <div class="chart-map-indicator">
           <span class="map-dot"></span>
@@ -4421,6 +4435,7 @@ function updateDailyOutreachChart() {
 
 function clearChartMapHighlight() {
   chartHighlightCompanies = null;
+  chartHighlightMax = 0;
   updateMap();
   document.getElementById('chartMapIndicator').innerHTML = '';
 }
