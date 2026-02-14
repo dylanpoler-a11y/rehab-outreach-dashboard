@@ -1508,8 +1508,9 @@ function initMap() {
     if (e.ctrlKey) {
       e.preventDefault();
       e.stopPropagation();
-      const newZoom = map.getZoom() + (e.deltaY > 0 ? -0.5 : 0.5);
-      map.setZoom(Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), newZoom)));
+      const zoomChange = -e.deltaY * 0.01;
+      const newZoom = Math.max(map.getMinZoom(), Math.min(map.getMaxZoom(), map.getZoom() + zoomChange));
+      map.setZoom(newZoom, { animate: false });
     }
   }, { passive: false });
 
