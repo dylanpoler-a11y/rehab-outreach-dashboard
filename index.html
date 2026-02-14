@@ -333,6 +333,15 @@ body::before {
 .chart-card.full-width { grid-column: 1 / -1; }
 
 .chart-title { font-size: 14px; font-weight: 700; margin-bottom: 16px; color: var(--text-primary); }
+.daily-chart-title-clickable {
+  cursor: pointer; border-radius: 8px; padding: 6px 12px; margin: -6px -12px 10px -12px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.daily-chart-title-clickable:hover { background: rgba(59,130,246,0.1); }
+.daily-chart-title-clickable.active { background: rgba(59,130,246,0.15); color: var(--accent-blue); }
+.chart-title-hint { font-size: 11px; font-weight: 400; color: var(--text-muted); transition: color 0.2s; }
+.daily-chart-title-clickable:hover .chart-title-hint { color: var(--accent-blue); }
+.daily-chart-title-clickable.active .chart-title-hint { display: none; }
 .chart-subtitle { font-size: 11px; color: var(--text-muted); margin-top: -12px; margin-bottom: 16px; }
 
 /* Bar chart */
@@ -876,9 +885,6 @@ body::before {
 }
 .daily-filter-btn:hover { border-color: var(--accent-blue); color: var(--text-secondary); }
 .daily-filter-btn.active { background: rgba(59,130,246,0.15); border-color: var(--accent-blue); color: var(--accent-blue); }
-.daily-date-range {
-  display: flex; align-items: center; gap: 4px;
-}
 .daily-date-input {
   background: var(--bg-glass); border: 1px solid var(--border); border-radius: 6px;
   color: var(--text-secondary); font-size: 11px; padding: 4px 8px; font-family: inherit;
@@ -1245,19 +1251,13 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div class="chart-card full-width animate-in" id="dailyOutreachCard">
           <div class="chart-header">
-            <div class="chart-title" style="cursor:pointer" id="dailyChartTitle" title="Click to select all bars and show heat map">Cold Outreach Volume</div>
+            <div class="chart-title daily-chart-title-clickable" id="dailyChartTitle" title="Click to select all bars and show heat map">Cold Outreach Volume <span class="chart-title-hint">— click to select all</span></div>
             <div class="daily-outreach-controls">
               <div class="daily-outreach-filters" id="dailyRangeFilters">
                 <button class="daily-filter-btn" data-range="daily">Daily</button>
                 <button class="daily-filter-btn" data-range="weekly">Weekly</button>
                 <button class="daily-filter-btn active" data-range="monthly">Monthly</button>
                 <button class="daily-filter-btn" data-range="quarterly">Quarterly</button>
-              </div>
-              <div class="daily-date-range" id="dailyDateRange">
-                <input type="date" class="daily-date-input" id="dailyDateFrom" title="From date">
-                <span class="daily-date-sep">–</span>
-                <input type="date" class="daily-date-input" id="dailyDateTo" title="To date">
-                <button class="daily-date-clear" id="dailyDateClear" title="Clear custom range">✕</button>
               </div>
               <div class="daily-outreach-filters" id="dailyChannelFilters"></div>
             </div>
@@ -4621,8 +4621,6 @@ let chartHighlightCompanies = null; // Map of company name → msg count, null =
 let chartHighlightMax = 0; // max msg count across highlighted companies
 let chartHeatByState = null; // Map of state name → msg count for heat map, null = off
 let chartHeatMaxState = 0; // max state msg count for normalization
-let customDateFrom = ''; // YYYY-MM-DD, empty = use default range
-let customDateTo = '';   // YYYY-MM-DD, empty = use default range
 
 function getDailyOutreachData() {
   // Build per-message list from DATA.messages (new) or reconstruct from companies (legacy)
@@ -4746,15 +4744,11 @@ function updateDailyOutreachChart() {
       break;
   }
 
-  // Override with chart-specific custom date range, or fall back to reporting date range
-  if (customDateFrom) {
-    startDate = new Date(customDateFrom + 'T00:00:00');
-  } else if (reportingDateFrom) {
+  // Override with reporting date range if set
+  if (reportingDateFrom) {
     startDate = new Date(reportingDateFrom + 'T00:00:00');
   }
-  if (customDateTo) {
-    endDate = new Date(customDateTo + 'T23:59:59');
-  } else if (reportingDateTo) {
+  if (reportingDateTo) {
     endDate = new Date(reportingDateTo + 'T23:59:59');
   } else {
     endDate = now;
@@ -4969,6 +4963,7 @@ function updateDailyOutreachChart() {
 
       if (anySelected) {
         // Deselect all
+        newTitle.classList.remove('active');
         clearChartSelection();
         return;
       }
@@ -4987,6 +4982,9 @@ function updateDailyOutreachChart() {
       });
 
       if (allMsgs.length === 0) return;
+
+      // Mark title as active
+      newTitle.classList.add('active');
 
       // Update map highlighting
       const companyCounts = new Map();
@@ -5055,6 +5053,8 @@ function clearChartMapHighlight() {
 
 function clearChartSelection() {
   document.querySelectorAll('#dailyOutreachChart .daily-chart-bar-wrap.selected').forEach(b => b.classList.remove('selected'));
+  const titleEl = document.getElementById('dailyChartTitle');
+  if (titleEl) titleEl.classList.remove('active');
   clearChartMapHighlight();
   document.getElementById('dailyDrilldown').innerHTML = '';
 }
@@ -5129,36 +5129,6 @@ function initDailyOutreachChart() {
       clearChartMapHighlight();
       updateDailyOutreachChart();
     });
-  });
-
-  // Wire custom date range inputs
-  const fromInput = document.getElementById('dailyDateFrom');
-  const toInput = document.getElementById('dailyDateTo');
-  const clearBtn = document.getElementById('dailyDateClear');
-
-  function onDateChange() {
-    customDateFrom = fromInput.value || '';
-    customDateTo = toInput.value || '';
-    fromInput.classList.toggle('active', !!customDateFrom);
-    toInput.classList.toggle('active', !!customDateTo);
-    clearBtn.classList.toggle('visible', !!(customDateFrom || customDateTo));
-    clearChartMapHighlight();
-    updateDailyOutreachChart();
-  }
-
-  fromInput.addEventListener('change', onDateChange);
-  toInput.addEventListener('change', onDateChange);
-
-  clearBtn.addEventListener('click', function() {
-    customDateFrom = '';
-    customDateTo = '';
-    fromInput.value = '';
-    toInput.value = '';
-    fromInput.classList.remove('active');
-    toInput.classList.remove('active');
-    clearBtn.classList.remove('visible');
-    clearChartMapHighlight();
-    updateDailyOutreachChart();
   });
 
   updateDailyOutreachChart();
