@@ -904,6 +904,18 @@ body::before {
   background: linear-gradient(180deg, #f59e0b, #f97316);
   box-shadow: 0 0 8px rgba(245,158,11,0.4);
 }
+.chart-map-indicator {
+  display: flex; align-items: center; gap: 8px; margin-top: 8px;
+  padding: 6px 12px; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3);
+  border-radius: 8px; font-size: 11px; color: #fbbf24; font-weight: 600;
+}
+.chart-map-indicator .map-dot { width: 6px; height: 6px; border-radius: 50%; background: #f59e0b; animation: pulse 1.5s infinite; }
+.chart-map-clear {
+  margin-left: auto; background: none; border: 1px solid rgba(245,158,11,0.4);
+  color: #fbbf24; font-size: 10px; padding: 2px 10px; border-radius: 4px;
+  cursor: pointer; font-family: inherit; font-weight: 600;
+}
+.chart-map-clear:hover { background: rgba(245,158,11,0.15); }
 
 /* Drill-down panel */
 .drilldown-panel {
@@ -1197,6 +1209,7 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
           <div class="daily-outreach-summary" id="dailyOutreachSummary"></div>
           <div class="daily-outreach-chart" id="dailyOutreachChart"></div>
+          <div id="chartMapIndicator"></div>
           <div id="dailyDrilldown"></div>
         </div>
         <div class="chart-card animate-in">
@@ -1604,6 +1617,17 @@ function updateMap() {
       } else {
         markerOpacity = 0.1;
         color = '#64748b';
+      }
+    }
+
+    // Chart highlight: dim markers not in selected chart bars
+    if (chartHighlightCompanies) {
+      const isMatch = chartHighlightCompanies.has(c.name);
+      if (!isMatch) {
+        markerOpacity = 0.08;
+        color = '#64748b';
+      } else {
+        markerOpacity = 1;
       }
     }
 
@@ -4047,6 +4071,7 @@ function updateActivityChart() {
 // ============================================================
 let dailyRange = 'daily';
 let dailyChannels = new Set(); // empty = all channels
+let chartHighlightCompanies = null; // Set of company names to highlight on map, null = no filter
 
 function getDailyOutreachData() {
   // Build per-message list from DATA.messages (new) or reconstruct from companies (legacy)
@@ -4061,7 +4086,7 @@ function getDailyOutreachData() {
       if (c.byMedium) {
         Object.entries(c.byMedium).forEach(([med, count]) => {
           for (let i = 0; i < count; i++) {
-            messages.push({ date: c.lastMsg || c.firstMsg || '', medium: med, account: '' });
+            messages.push({ date: c.lastMsg || c.firstMsg || '', medium: med, account: '', company: c.name || '', contact: '' });
           }
         });
       }
@@ -4255,8 +4280,10 @@ function updateDailyOutreachChart() {
     <div class="daily-summary-stat"><span class="daily-summary-val">${maxEntry.val}</span><span class="daily-summary-label">Peak (${peakLabel})</span></div>
   `;
 
-  // Render bars
+  // Render bars — clear any previous selection/drill-down/map highlight
   document.getElementById('dailyDrilldown').innerHTML = '';
+  document.getElementById('chartMapIndicator').innerHTML = '';
+  if (chartHighlightCompanies) { chartHighlightCompanies = null; updateMap(); }
   if (entries.length === 0) {
     document.getElementById('dailyOutreachChart').innerHTML = '<div class="daily-chart-empty">No data in selected range</div>';
     return;
@@ -4289,23 +4316,70 @@ function updateDailyOutreachChart() {
     </div>
   `;
 
-  // Wire bar click → drill-down
+  // Wire bar click → multi-select drill-down + map highlight
   document.querySelectorAll('#dailyOutreachChart .daily-chart-bar-wrap').forEach(bar => {
     bar.addEventListener('click', function() {
       const key = this.dataset.key;
       const msgs = bucketMsgs[key] || [];
       if (msgs.length === 0) return;
-      // Toggle selection
-      const wasSelected = this.classList.contains('selected');
-      document.querySelectorAll('#dailyOutreachChart .daily-chart-bar-wrap').forEach(b => b.classList.remove('selected'));
-      if (wasSelected) {
+
+      // Toggle this bar's selection
+      this.classList.toggle('selected');
+
+      // Collect all messages from all selected bars
+      const selectedBars = document.querySelectorAll('#dailyOutreachChart .daily-chart-bar-wrap.selected');
+      const allSelectedMsgs = [];
+      const allSelectedKeys = [];
+      selectedBars.forEach(b => {
+        const k = b.dataset.key;
+        allSelectedKeys.push(k);
+        (bucketMsgs[k] || []).forEach(m => allSelectedMsgs.push(m));
+      });
+
+      if (allSelectedMsgs.length === 0) {
+        // Nothing selected — clear everything
+        clearChartMapHighlight();
         document.getElementById('dailyDrilldown').innerHTML = '';
         return;
       }
-      this.classList.add('selected');
-      renderDrilldown(key, msgs, formatBucketLabel);
+
+      // Update map highlighting
+      const companies = new Set();
+      allSelectedMsgs.forEach(m => {
+        if (m.company) m.company.split(', ').forEach(c => { if (c) companies.add(c); });
+      });
+      chartHighlightCompanies = companies.size > 0 ? companies : null;
+      updateMap();
+
+      // Show map indicator
+      const compCount = companies.size;
+      document.getElementById('chartMapIndicator').innerHTML = `
+        <div class="chart-map-indicator">
+          <span class="map-dot"></span>
+          Showing ${compCount} compan${compCount !== 1 ? 'ies' : 'y'} on map from ${allSelectedKeys.length} selected bar${allSelectedKeys.length !== 1 ? 's' : ''}
+          <button class="chart-map-clear" onclick="clearChartSelection()">Clear</button>
+        </div>
+      `;
+
+      // Render combined drill-down
+      const title = allSelectedKeys.length === 1
+        ? formatBucketLabel(allSelectedKeys[0])
+        : `${allSelectedKeys.length} periods selected`;
+      renderDrilldown(title, allSelectedMsgs, formatBucketLabel, true);
     });
   });
+}
+
+function clearChartMapHighlight() {
+  chartHighlightCompanies = null;
+  updateMap();
+  document.getElementById('chartMapIndicator').innerHTML = '';
+}
+
+function clearChartSelection() {
+  document.querySelectorAll('#dailyOutreachChart .daily-chart-bar-wrap.selected').forEach(b => b.classList.remove('selected'));
+  clearChartMapHighlight();
+  document.getElementById('dailyDrilldown').innerHTML = '';
 }
 
 function getMediumClass(medium) {
@@ -4318,8 +4392,8 @@ function getMediumClass(medium) {
   return 'drilldown-medium-default';
 }
 
-function renderDrilldown(key, msgs, formatBucketLabel) {
-  const title = formatBucketLabel(key);
+function renderDrilldown(title, msgs, formatBucketLabel, isPreformatted) {
+  if (!isPreformatted) title = formatBucketLabel(title);
   // Sort by date descending
   const sorted = [...msgs].sort((a, b) => {
     const da = a.date ? parseDateStr(a.date).getTime() : 0;
@@ -4342,7 +4416,7 @@ function renderDrilldown(key, msgs, formatBucketLabel) {
     <div class="drilldown-panel">
       <div class="drilldown-header">
         <span class="drilldown-title">${title}<span class="drilldown-count">${msgs.length} message${msgs.length !== 1 ? 's' : ''}</span></span>
-        <button class="drilldown-close" onclick="document.getElementById('dailyDrilldown').innerHTML=''; document.querySelectorAll('#dailyOutreachChart .selected').forEach(b=>b.classList.remove('selected'));">✕</button>
+        <button class="drilldown-close" onclick="clearChartSelection()">✕</button>
       </div>
       <div class="drilldown-table-wrap">
         <table class="drilldown-table">
@@ -4372,6 +4446,7 @@ function initDailyOutreachChart() {
       document.querySelectorAll('#dailyRangeFilters .daily-filter-btn').forEach(b => b.classList.remove('active'));
       this.classList.add('active');
       dailyRange = this.dataset.range;
+      clearChartMapHighlight();
       updateDailyOutreachChart();
     });
   });
