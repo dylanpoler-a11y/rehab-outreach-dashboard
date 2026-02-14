@@ -872,6 +872,9 @@ body::before {
   background: rgba(255,255,255,0.02); position: sticky; top: 0; cursor: pointer;
 }
 .data-table th:hover { color: var(--text-primary); }
+.data-table th .sort-arrow { font-size: 10px; margin-left: 4px; opacity: 0.3; }
+.data-table th.sorted .sort-arrow { opacity: 1; color: var(--accent-blue); }
+.data-table th.sorted { color: var(--accent-blue); }
 .data-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text-secondary); }
 .data-table tr:hover td { background: rgba(59, 130, 246, 0.05); color: var(--text-primary); }
 
@@ -4043,11 +4046,59 @@ function getDisplayData() {
   return filteredData.filter(kpiDef.fn);
 }
 
+let tableSortKey = 'name';
+let tableSortDir = 'asc'; // 'asc' or 'desc'
+
+const TABLE_COLUMNS = [
+  { key: 'name',       label: 'Company' },
+  { key: 'state',      label: 'State' },
+  { key: 'ownership',  label: 'Ownership' },
+  { key: 'msgsSent',   label: 'Msgs' },
+  { key: 'responded',  label: 'Responded' },
+  { key: 'intro',      label: 'Intro' },
+  { key: 'meeting',    label: 'Meeting' },
+  { key: 'pipeline',   label: 'Pipeline' },
+  { key: 'status',     label: 'Status' },
+];
+
+function getStatusRank(c) {
+  if (c.notInterested) return 6;
+  if (c.inPipeline) return 0;
+  if (c.assistedMeeting) return 1;
+  if (c.scheduledIntro) return 2;
+  if (c.responded) return 3;
+  if (c.msgsSent > 0) return 4;
+  return 5;
+}
+
+function sortTableData(data) {
+  const dir = tableSortDir === 'asc' ? 1 : -1;
+  return [...data].sort((a, b) => {
+    let va, vb;
+    switch (tableSortKey) {
+      case 'name':      va = a.name.toLowerCase(); vb = b.name.toLowerCase(); break;
+      case 'state':     va = (a.fullState || a.state || '').toLowerCase(); vb = (b.fullState || b.state || '').toLowerCase(); break;
+      case 'ownership': va = (a.ownership || '').toLowerCase(); vb = (b.ownership || '').toLowerCase(); break;
+      case 'msgsSent':  return (a.msgsSent - b.msgsSent) * dir;
+      case 'responded': return ((a.responded ? a.respondedCount : 0) - (b.responded ? b.respondedCount : 0)) * dir;
+      case 'intro':     return ((a.scheduledIntro ? 1 : 0) - (b.scheduledIntro ? 1 : 0)) * dir;
+      case 'meeting':   return ((a.assistedMeeting ? 1 : 0) - (b.assistedMeeting ? 1 : 0)) * dir;
+      case 'pipeline':  va = (a.pipelineStatus || '').toLowerCase(); vb = (b.pipelineStatus || '').toLowerCase(); break;
+      case 'status':    return (getStatusRank(a) - getStatusRank(b)) * dir;
+      default:          va = ''; vb = '';
+    }
+    return va < vb ? -dir : va > vb ? dir : 0;
+  });
+}
+
 function updateTable() {
-  const displayData = getDisplayData();
+  const displayData = sortTableData(getDisplayData());
+  const arrow = tableSortDir === 'asc' ? '▲' : '▼';
   document.getElementById('tableContainer').innerHTML = `
     <table class="data-table"><thead><tr>
-      <th>Company</th><th>State</th><th>Ownership</th><th>Msgs</th><th>Responded</th><th>Intro</th><th>Meeting</th><th>Pipeline</th><th>Status</th>
+      ${TABLE_COLUMNS.map(col =>
+        `<th class="${tableSortKey === col.key ? 'sorted' : ''}" data-sort="${col.key}">${col.label}<span class="sort-arrow">${tableSortKey === col.key ? arrow : '▲'}</span></th>`
+      ).join('')}
     </tr></thead><tbody>
       ${displayData.map(c => {
         const sc = c.inPipeline ? '#ec4899' : c.assistedMeeting ? '#10b981' : c.scheduledIntro ? '#8b5cf6' : c.responded ? '#3b82f6' : c.msgsSent > 0 ? '#f59e0b' : '#64748b';
@@ -4066,6 +4117,20 @@ function updateTable() {
       }).join('')}
     </tbody></table>
   `;
+
+  // Wire sort click handlers
+  document.querySelectorAll('.data-table th[data-sort]').forEach(th => {
+    th.addEventListener('click', function() {
+      const key = this.dataset.sort;
+      if (tableSortKey === key) {
+        tableSortDir = tableSortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        tableSortKey = key;
+        tableSortDir = 'asc';
+      }
+      updateTable();
+    });
+  });
 }
 
 // ============================================================
