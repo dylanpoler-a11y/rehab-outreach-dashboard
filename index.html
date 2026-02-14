@@ -306,7 +306,8 @@ body::before {
 .custom-popup .leaflet-popup-close-btn { color: var(--text-muted) !important; font-size: 18px !important; top: 8px !important; right: 8px !important; }
 
 .popup-content { padding: 16px; min-width: 280px; max-width: 340px; }
-.popup-name { font-size: 15px; font-weight: 700; color: var(--text-primary); line-height: 1.3; }
+.popup-name { font-size: 15px; font-weight: 700; color: var(--text-primary); line-height: 1.3; cursor: grab; user-select: none; }
+.popup-name:active { cursor: grabbing; }
 .popup-badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
 .popup-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
 .popup-row:last-child { border-bottom: none; }
@@ -1328,6 +1329,59 @@ function initMap() {
   ghostLayer = L.layerGroup().addTo(map);
   highlightLayer = L.layerGroup().addTo(map);
   map.on('popupclose', () => clearGhostMarkers());
+
+  // Make map popups draggable by their header
+  map.on('popupopen', function(e) {
+    const popupEl = e.popup.getElement();
+    if (!popupEl) return;
+    const nameEl = popupEl.querySelector('.popup-name');
+    if (!nameEl) return;
+    nameEl.style.cursor = 'grab';
+    nameEl.style.userSelect = 'none';
+
+    let dragX = 0, dragY = 0, dragging = false;
+    let startLeft = 0, startTop = 0;
+
+    function onMouseDown(ev) {
+      dragging = true;
+      dragX = ev.clientX;
+      dragY = ev.clientY;
+      const style = window.getComputedStyle(popupEl);
+      startLeft = parseInt(style.left) || 0;
+      startTop = parseInt(style.top) || 0;
+      nameEl.style.cursor = 'grabbing';
+      map.dragging.disable();
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+    function onMouseMove(ev) {
+      if (!dragging) return;
+      const dx = ev.clientX - dragX;
+      const dy = ev.clientY - dragY;
+      popupEl.style.left = (startLeft + dx) + 'px';
+      popupEl.style.top = (startTop + dy) + 'px';
+      // Disable Leaflet's auto-repositioning
+      popupEl.style.transition = 'none';
+    }
+    function onMouseUp() {
+      if (!dragging) return;
+      dragging = false;
+      nameEl.style.cursor = 'grab';
+      map.dragging.enable();
+    }
+
+    nameEl.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+
+    // Clean up listeners when popup closes
+    e.popup.once('remove', () => {
+      nameEl.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    });
+  });
+
   map.on('click', () => {
     if (selectedCards.size > 0) { clearCardSelection(); updateMapHighlights(); }
     if (activeKPI) { activeKPI = null; applyKPIHighlight(); updateTable(); document.querySelectorAll('.kpi-card[data-kpi]').forEach(c => c.classList.remove('selected','dimmed')); }
