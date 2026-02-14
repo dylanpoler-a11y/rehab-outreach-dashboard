@@ -363,6 +363,16 @@ body::before {
 .chart-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
 .chart-header .chart-title { margin-bottom: 0; }
 
+.reporting-date-bar {
+  display: flex; align-items: center; gap: 16px; padding: 12px 20px;
+  background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.15);
+  border-radius: 12px; margin-bottom: 0; flex-wrap: wrap;
+}
+.reporting-date-label { font-size: 12px; font-weight: 700; color: var(--text-secondary); white-space: nowrap; }
+.reporting-date-controls { display: flex; align-items: center; gap: 4px; }
+.reporting-date-hint { font-size: 10px; color: var(--text-muted); font-style: italic; margin-left: auto; }
+.reporting-date-hint.active { color: var(--accent-blue); font-style: normal; font-weight: 600; }
+
 /* Donut */
 .donut-container { display: flex; align-items: center; gap: 32px; }
 .donut-svg { width: 160px; height: 160px; }
@@ -1223,6 +1233,16 @@ document.addEventListener('DOMContentLoaded', () => {
       <!-- Reporting Tab Panel -->
       <div class="tab-panel" id="panelReporting" data-panel="reporting">
         <div class="charts-section" id="chartsSection">
+        <div class="reporting-date-bar full-width animate-in">
+          <div class="reporting-date-label">📅 Reporting Date Range</div>
+          <div class="reporting-date-controls">
+            <input type="date" class="daily-date-input" id="reportingDateFrom" title="From date">
+            <span class="daily-date-sep">–</span>
+            <input type="date" class="daily-date-input" id="reportingDateTo" title="To date">
+            <button class="daily-date-clear" id="reportingDateClear" title="Clear date range">✕</button>
+          </div>
+          <div class="reporting-date-hint" id="reportingDateHint">Applies to all charts below</div>
+        </div>
         <div class="chart-card full-width animate-in" id="dailyOutreachCard">
           <div class="chart-header">
             <div class="chart-title" style="cursor:pointer" id="dailyChartTitle" title="Click to select all bars and show heat map">Cold Outreach Volume</div>
@@ -1248,15 +1268,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div id="dailyDrilldown"></div>
         </div>
         <div class="chart-card animate-in">
-          <div class="chart-header">
-            <div class="chart-title">Outreach Funnel</div>
-            <div class="daily-date-range" id="funnelDateRange">
-              <input type="date" class="daily-date-input" id="funnelDateFrom" title="From date">
-              <span class="daily-date-sep">–</span>
-              <input type="date" class="daily-date-input" id="funnelDateTo" title="To date">
-              <button class="daily-date-clear" id="funnelDateClear" title="Clear date range">✕</button>
-            </div>
-          </div>
+          <div class="chart-title">Outreach Funnel</div>
           <div class="funnel" id="funnelChart"></div>
           <div id="funnelDrilldown"></div>
         </div>
@@ -1273,15 +1285,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <div id="stateDrilldown"></div>
         </div>
         <div class="chart-card animate-in">
-          <div class="chart-header">
-            <div class="chart-title">Messages by Channel</div>
-            <div class="daily-date-range" id="channelDateRange">
-              <input type="date" class="daily-date-input" id="channelDateFrom" title="From date">
-              <span class="daily-date-sep">–</span>
-              <input type="date" class="daily-date-input" id="channelDateTo" title="To date">
-              <button class="daily-date-clear" id="channelDateClear" title="Clear date range">✕</button>
-            </div>
-          </div>
+          <div class="chart-title">Messages by Channel</div>
           <div class="bar-chart" id="mediumBarChart"></div>
         </div>
         <div class="chart-card animate-in">
@@ -2352,9 +2356,8 @@ function renderPipeline() {
   // Migrate manual nextAction text into proper action items
   migrateManualNextActions();
 
-  // Initialize date range pickers for funnel and channel charts
-  initFunnelDateRange();
-  initChannelDateRange();
+  // Initialize unified reporting date range
+  initReportingDateRange();
 
   // Initialize action items system
   initActionItems();
@@ -3972,10 +3975,8 @@ function updateCharts() {
 }
 
 let funnelSelectedStep = null; // track which step is selected
-let funnelDateFrom = '';
-let funnelDateTo = '';
-let channelDateFrom = '';
-let channelDateTo = '';
+let reportingDateFrom = '';
+let reportingDateTo = '';
 let channelSelectedBars = new Set(); // selected channel names for cross-filter
 
 // Cross-filter: get filtered companies excluding one chart's own filter
@@ -4050,56 +4051,46 @@ function filterMessagesByDateRange(messages, dateFrom, dateTo) {
   });
 }
 
-function initFunnelDateRange() {
-  const fromInput = document.getElementById('funnelDateFrom');
-  const toInput = document.getElementById('funnelDateTo');
-  const clearBtn = document.getElementById('funnelDateClear');
+function initReportingDateRange() {
+  const fromInput = document.getElementById('reportingDateFrom');
+  const toInput = document.getElementById('reportingDateTo');
+  const clearBtn = document.getElementById('reportingDateClear');
+  const hint = document.getElementById('reportingDateHint');
 
   function onChange() {
-    funnelDateFrom = fromInput.value || '';
-    funnelDateTo = toInput.value || '';
-    fromInput.classList.toggle('active', !!funnelDateFrom);
-    toInput.classList.toggle('active', !!funnelDateTo);
-    clearBtn.classList.toggle('visible', !!(funnelDateFrom || funnelDateTo));
-    updateFunnel();
+    reportingDateFrom = fromInput.value || '';
+    reportingDateTo = toInput.value || '';
+    fromInput.classList.toggle('active', !!reportingDateFrom);
+    toInput.classList.toggle('active', !!reportingDateTo);
+    clearBtn.classList.toggle('visible', !!(reportingDateFrom || reportingDateTo));
+    // Update hint text
+    if (reportingDateFrom || reportingDateTo) {
+      const from = reportingDateFrom || 'start';
+      const to = reportingDateTo || 'now';
+      hint.textContent = `Filtering: ${from} – ${to}`;
+      hint.classList.add('active');
+    } else {
+      hint.textContent = 'Applies to all charts below';
+      hint.classList.remove('active');
+    }
+    // Refresh all four charts
+    updateCharts();
   }
   fromInput.addEventListener('change', onChange);
   toInput.addEventListener('change', onChange);
   clearBtn.addEventListener('click', () => {
-    funnelDateFrom = ''; funnelDateTo = '';
+    reportingDateFrom = ''; reportingDateTo = '';
     fromInput.value = ''; toInput.value = '';
     fromInput.classList.remove('active'); toInput.classList.remove('active');
     clearBtn.classList.remove('visible');
-    updateFunnel();
-  });
-}
-
-function initChannelDateRange() {
-  const fromInput = document.getElementById('channelDateFrom');
-  const toInput = document.getElementById('channelDateTo');
-  const clearBtn = document.getElementById('channelDateClear');
-
-  function onChange() {
-    channelDateFrom = fromInput.value || '';
-    channelDateTo = toInput.value || '';
-    fromInput.classList.toggle('active', !!channelDateFrom);
-    toInput.classList.toggle('active', !!channelDateTo);
-    clearBtn.classList.toggle('visible', !!(channelDateFrom || channelDateTo));
-    updateMediumChart();
-  }
-  fromInput.addEventListener('change', onChange);
-  toInput.addEventListener('change', onChange);
-  clearBtn.addEventListener('click', () => {
-    channelDateFrom = ''; channelDateTo = '';
-    fromInput.value = ''; toInput.value = '';
-    fromInput.classList.remove('active'); toInput.classList.remove('active');
-    clearBtn.classList.remove('visible');
-    updateMediumChart();
+    hint.textContent = 'Applies to all charts below';
+    hint.classList.remove('active');
+    updateCharts();
   });
 }
 
 function updateFunnel() {
-  const d = filterCompaniesByDateRange(getCrossFilteredData('funnel'), funnelDateFrom, funnelDateTo);
+  const d = filterCompaniesByDateRange(getCrossFilteredData('funnel'), reportingDateFrom, reportingDateTo);
   const total = d.length;
   const contacted = d.filter(c => c.msgsSent > 0);
   const responded = d.filter(c => c.responded);
@@ -4421,8 +4412,8 @@ function makeBarChart(containerId, data, colors) {
 let stateSelectedBar = null; // track which state bar is selected for drilldown
 
 function updateStateChart() {
-  // Use cross-filtered data (excluding state's own filter to prevent self-collapse)
-  const crossData = getCrossFilteredData('state');
+  // Use cross-filtered data (excluding state's own filter to prevent self-collapse), then apply reporting date range
+  const crossData = filterCompaniesByDateRange(getCrossFilteredData('state'), reportingDateFrom, reportingDateTo);
   const counts = {};
   const companiesByState = {};
   crossData.forEach(c => {
@@ -4559,9 +4550,9 @@ function clearStateFilter() {
 function updateMediumChart() {
   const crossData = getCrossFilteredData('channel');
   const counts = {};
-  if (channelDateFrom || channelDateTo) {
+  if (reportingDateFrom || reportingDateTo) {
     const allMsgs = getDailyOutreachData();
-    const filtered = filterMessagesByDateRange(allMsgs, channelDateFrom, channelDateTo);
+    const filtered = filterMessagesByDateRange(allMsgs, reportingDateFrom, reportingDateTo);
     filtered.forEach(m => { if (m.medium) counts[m.medium] = (counts[m.medium] || 0) + 1; });
   } else {
     crossData.forEach(c => {
@@ -4745,12 +4736,16 @@ function updateDailyOutreachChart() {
       break;
   }
 
-  // Override with custom date range if set
+  // Override with chart-specific custom date range, or fall back to reporting date range
   if (customDateFrom) {
     startDate = new Date(customDateFrom + 'T00:00:00');
+  } else if (reportingDateFrom) {
+    startDate = new Date(reportingDateFrom + 'T00:00:00');
   }
   if (customDateTo) {
     endDate = new Date(customDateTo + 'T23:59:59');
+  } else if (reportingDateTo) {
+    endDate = new Date(reportingDateTo + 'T23:59:59');
   } else {
     endDate = now;
   }
