@@ -983,6 +983,8 @@ body::before {
   border: 1px solid rgba(252,196,25,0.25); flex-shrink: 0; line-height: 1;
 }
 .drilldown-at-btn:hover { background: rgba(252,196,25,0.3); border-color: rgba(252,196,25,0.5); }
+.heat-tooltip { background: rgba(15,23,42,0.9) !important; border: 1px solid var(--border) !important; color: var(--text-primary) !important; font-size: 11px !important; font-weight: 600 !important; padding: 4px 10px !important; border-radius: 6px !important; box-shadow: 0 4px 12px rgba(0,0,0,0.4) !important; }
+.heat-tooltip::before { border-bottom-color: rgba(15,23,42,0.9) !important; }
 
 /* Table view */
 .table-container { display: none; padding: 0 24px 24px; overflow-x: auto; }
@@ -1223,7 +1225,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="charts-section" id="chartsSection">
         <div class="chart-card full-width animate-in" id="dailyOutreachCard">
           <div class="chart-header">
-            <div class="chart-title">Cold Outreach Volume</div>
+            <div class="chart-title" style="cursor:pointer" id="dailyChartTitle" title="Click to select all bars and show heat map">Cold Outreach Volume</div>
             <div class="daily-outreach-controls">
               <div class="daily-outreach-filters" id="dailyRangeFilters">
                 <button class="daily-filter-btn" data-range="daily">Daily</button>
@@ -1574,18 +1576,23 @@ function renderStateBoundaries() {
         layer._stateName = name;
         layer.on({
           mouseover: e => {
-            if (!activeFilters.state.has(name)) {
+            if (chartHeatByState) {
+              const count = chartHeatByState.get(name) || 0;
+              if (count > 0) {
+                layer.bindTooltip(`${name}: ${count} message${count !== 1 ? 's' : ''}`, { sticky: true, className: 'heat-tooltip' }).openTooltip();
+                e.target.setStyle({ weight: 2.5, color: 'rgba(255,255,255,0.6)' });
+              }
+            } else if (!activeFilters.state.has(name)) {
               e.target.setStyle({ fillColor: 'rgba(59, 130, 246, 0.12)', color: 'rgba(59, 130, 246, 0.3)', weight: 1.5 });
             }
           },
           mouseout: e => {
-            if (!activeFilters.state.has(name)) {
-              e.target.setStyle(getStateStyle(name));
-            }
+            layer.unbindTooltip();
+            e.target.setStyle(getStateStyle(name));
           },
           click: e => {
             L.DomEvent.stopPropagation(e);
-            toggleStateFilter(name);
+            if (!chartHeatByState) toggleStateFilter(name);
           }
         });
       }
@@ -1600,6 +1607,32 @@ function renderStateBoundaries() {
 }
 
 function getStateStyle(name) {
+  // Heat map mode: color states by outreach volume
+  if (chartHeatByState) {
+    const count = chartHeatByState.get(name) || 0;
+    if (count > 0) {
+      const ratio = chartHeatMaxState > 0 ? count / chartHeatMaxState : 0;
+      // Warm gradient: low = dark blue/teal, high = orange/red
+      const r = Math.round(30 + ratio * 225);   // 30 → 255
+      const g = Math.round(80 + (1 - ratio) * 100 - ratio * 30); // 180 → 50
+      const b = Math.round(180 - ratio * 150);   // 180 → 30
+      const opacity = 0.15 + ratio * 0.45;
+      return {
+        fillColor: `rgb(${r},${g},${b})`,
+        fillOpacity: opacity,
+        color: `rgba(${r},${g},${b},0.7)`,
+        weight: 1.5,
+      };
+    } else {
+      return {
+        fillColor: 'rgba(255, 255, 255, 0.01)',
+        fillOpacity: 1,
+        color: 'rgba(255, 255, 255, 0.04)',
+        weight: 0.3,
+      };
+    }
+  }
+
   const isActive = activeFilters.state.has(name);
   return {
     fillColor: isActive ? 'rgba(59, 130, 246, 0.25)' : 'rgba(255, 255, 255, 0.02)',
@@ -4070,12 +4103,14 @@ function updateFunnel() {
         document.getElementById('funnelDrilldown').innerHTML = '';
         chartHighlightCompanies = null;
         chartHighlightMax = 0;
+        clearChartHeatMap();
         updateMap();
         document.getElementById('chartMapIndicator').innerHTML = '';
       } else {
-        // Clear any active chart bar selections first
+        // Clear any active chart bar selections and heat map first
         document.querySelectorAll('#dailyOutreachChart .daily-chart-bar-wrap.selected').forEach(b => b.classList.remove('selected'));
         document.getElementById('dailyDrilldown').innerHTML = '';
+        clearChartHeatMap();
 
         funnelSelectedStep = stepKey;
 
@@ -4510,6 +4545,8 @@ let dailyRange = 'monthly';
 let dailyChannels = new Set(); // empty = all channels
 let chartHighlightCompanies = null; // Map of company name → msg count, null = no filter
 let chartHighlightMax = 0; // max msg count across highlighted companies
+let chartHeatByState = null; // Map of state name → msg count for heat map, null = off
+let chartHeatMaxState = 0; // max state msg count for normalization
 let customDateFrom = ''; // YYYY-MM-DD, empty = use default range
 let customDateTo = '';   // YYYY-MM-DD, empty = use default range
 
@@ -4648,6 +4685,7 @@ function updateDailyOutreachChart() {
   // Aggregate into buckets — track counts and messages
   const bucketMap = {};
   const bucketMsgs = {};
+  window._chartBucketMsgs = bucketMsgs; // expose for select-all
   const bucketOrder = [];
   let totalInRange = 0;
   parsed.forEach(({ d, msg }) => {
@@ -4819,12 +4857,16 @@ function updateDailyOutreachChart() {
       }
       updateMap();
 
+      // Compute state heat map
+      computeChartHeatMap(allSelectedMsgs);
+
       // Show map indicator
       const compCount = companyCounts.size;
+      const stateCount = chartHeatByState ? chartHeatByState.size : 0;
       document.getElementById('chartMapIndicator').innerHTML = `
         <div class="chart-map-indicator">
           <span class="map-dot"></span>
-          Showing ${compCount} compan${compCount !== 1 ? 'ies' : 'y'} on map from ${allSelectedKeys.length} selected bar${allSelectedKeys.length !== 1 ? 's' : ''}
+          Showing ${compCount} compan${compCount !== 1 ? 'ies' : 'y'} across ${stateCount} state${stateCount !== 1 ? 's' : ''} from ${allSelectedKeys.length} bar${allSelectedKeys.length !== 1 ? 's' : ''}
           <button class="chart-map-clear" onclick="clearChartSelection()">Clear</button>
         </div>
       `;
@@ -4836,11 +4878,99 @@ function updateDailyOutreachChart() {
       renderDrilldown(title, allSelectedMsgs, formatBucketLabel, true);
     });
   });
+
+  // Wire "select all" on chart title click
+  const titleEl = document.getElementById('dailyChartTitle');
+  if (titleEl) {
+    // Remove old listener by cloning
+    const newTitle = titleEl.cloneNode(true);
+    titleEl.parentNode.replaceChild(newTitle, titleEl);
+    newTitle.addEventListener('click', function() {
+      const allBars = document.querySelectorAll('#dailyOutreachChart .daily-chart-bar-wrap');
+      const anySelected = document.querySelectorAll('#dailyOutreachChart .daily-chart-bar-wrap.selected').length > 0;
+
+      if (anySelected) {
+        // Deselect all
+        clearChartSelection();
+        return;
+      }
+
+      // Select all bars with data
+      const allMsgs = [];
+      const allKeys = [];
+      allBars.forEach(b => {
+        const k = b.dataset.key;
+        const msgs = (window._chartBucketMsgs || {})[k] || [];
+        if (msgs.length > 0) {
+          b.classList.add('selected');
+          allKeys.push(k);
+          msgs.forEach(m => allMsgs.push(m));
+        }
+      });
+
+      if (allMsgs.length === 0) return;
+
+      // Update map highlighting
+      const companyCounts = new Map();
+      allMsgs.forEach(m => {
+        if (m.company) m.company.split(', ').forEach(c => {
+          if (c) companyCounts.set(c, (companyCounts.get(c) || 0) + 1);
+        });
+      });
+      chartHighlightCompanies = companyCounts.size > 0 ? companyCounts : null;
+      chartHighlightMax = 0;
+      companyCounts.forEach(v => { if (v > chartHighlightMax) chartHighlightMax = v; });
+      updateMap();
+
+      // Compute heat map
+      computeChartHeatMap(allMsgs);
+
+      // Show indicator
+      const compCount = companyCounts.size;
+      const stateCount = chartHeatByState ? chartHeatByState.size : 0;
+      document.getElementById('chartMapIndicator').innerHTML = `
+        <div class="chart-map-indicator">
+          <span class="map-dot"></span>
+          Showing ${compCount} compan${compCount !== 1 ? 'ies' : 'y'} across ${stateCount} state${stateCount !== 1 ? 's' : ''} — All periods
+          <button class="chart-map-clear" onclick="clearChartSelection()">Clear</button>
+        </div>
+      `;
+
+      // Render drilldown
+      renderDrilldown('All periods', allMsgs, k => k, true);
+    });
+  }
+}
+
+function computeChartHeatMap(msgs) {
+  // Count messages per state by looking up company objects
+  const stateCounts = new Map();
+  msgs.forEach(m => {
+    if (m.company) m.company.split(', ').forEach(name => {
+      if (!name) return;
+      const comp = DATA.companies.find(c => c.name === name);
+      if (comp) {
+        const st = comp.fullState || comp.state;
+        if (st && st !== '#ERROR!') stateCounts.set(st, (stateCounts.get(st) || 0) + 1);
+      }
+    });
+  });
+  chartHeatByState = stateCounts.size > 0 ? stateCounts : null;
+  chartHeatMaxState = 0;
+  stateCounts.forEach(v => { if (v > chartHeatMaxState) chartHeatMaxState = v; });
+  renderStateBoundaries();
+}
+
+function clearChartHeatMap() {
+  chartHeatByState = null;
+  chartHeatMaxState = 0;
+  renderStateBoundaries();
 }
 
 function clearChartMapHighlight() {
   chartHighlightCompanies = null;
   chartHighlightMax = 0;
+  clearChartHeatMap();
   updateMap();
   document.getElementById('chartMapIndicator').innerHTML = '';
 }
