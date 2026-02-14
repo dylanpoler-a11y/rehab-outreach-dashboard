@@ -4072,16 +4072,16 @@ function filterCompaniesByDateRange(companies, dateFrom, dateTo) {
   const to = dateTo ? new Date(dateTo + 'T23:59:59') : null;
   return companies.filter(c => {
     // A company matches if its outreach period overlaps with the date range
-    // i.e. firstMsg <= dateTo AND lastMsg >= dateFrom
     const first = c.firstMsg ? parseDateStr(c.firstMsg) : null;
     const last = c.lastMsg ? parseDateStr(c.lastMsg) : null;
-    if (!first && !last) return false;
-    // Use whichever dates are available; if only one exists, use it for both
-    const earliest = (first && !isNaN(first.getTime())) ? first : last;
-    const latest = (last && !isNaN(last.getTime())) ? last : first;
-    if (!earliest || isNaN(earliest.getTime())) return false;
-    if (to && earliest > to) return false;   // company started after range ends
-    if (from && latest < from) return false;  // company ended before range starts
+    const validFirst = first && !isNaN(first.getTime()) ? first : null;
+    const validLast = last && !isNaN(last.getTime()) ? last : null;
+    if (!validFirst && !validLast) return false;
+    // Data has firstMsg/lastMsg swapped for many records — use min/max to be safe
+    const earliest = validFirst && validLast ? new Date(Math.min(validFirst, validLast)) : (validFirst || validLast);
+    const latest = validFirst && validLast ? new Date(Math.max(validFirst, validLast)) : (validFirst || validLast);
+    if (to && earliest > to) return false;    // company started after range ends
+    if (from && latest < from) return false;   // company ended before range starts
     return true;
   });
 }
