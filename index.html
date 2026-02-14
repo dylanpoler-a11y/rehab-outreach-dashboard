@@ -961,8 +961,12 @@ body::before {
   padding: 8px 12px; text-align: left; font-size: 9px; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);
   border-bottom: 1px solid var(--border); position: sticky; top: 0;
-  background: rgba(15,23,42,0.95);
+  background: rgba(15,23,42,0.95); cursor: pointer; user-select: none; white-space: nowrap;
 }
+.drilldown-table th:hover { color: var(--text-secondary); }
+.drilldown-table th .sort-arrow { margin-left: 4px; font-size: 8px; opacity: 0.3; }
+.drilldown-table th.sort-active .sort-arrow { opacity: 1; color: var(--accent-blue); }
+.drilldown-table th.sort-active { color: var(--accent-blue); }
 .drilldown-table td {
   padding: 6px 12px; border-bottom: 1px solid rgba(148,163,184,0.06);
   color: var(--text-secondary);
@@ -4014,26 +4018,65 @@ function updateFunnelStepStates() {
   });
 }
 
-function renderFunnelDrilldown(step) {
-  const sorted = [...step.companies].sort((a, b) => (b.msgsSent || 0) - (a.msgsSent || 0));
+// ── Drilldown sorting utility ──
+function wireDrilldownSort(tableEl, data, columns, renderRowFn) {
+  let sortCol = columns[0].key;
+  let sortDir = columns[0].defaultDir || 'asc';
 
-  function getStatusLabel(c) {
-    if (c.inPipeline) return `<span class="drilldown-medium drilldown-medium-email">${c.pipelineStatus || 'Pipeline'}</span>`;
-    if (c.assistedMeeting) return '<span class="drilldown-medium drilldown-medium-vm">Meeting</span>';
-    if (c.scheduledIntro) return '<span class="drilldown-medium drilldown-medium-linkedin">Intro Scheduled</span>';
-    if (c.responded) return '<span class="drilldown-medium drilldown-medium-text">Responded</span>';
-    if (c.msgsSent > 0) return '<span class="drilldown-medium drilldown-medium-call">Contacted</span>';
-    return '<span class="drilldown-medium drilldown-medium-default">Not Contacted</span>';
+  function doSort() {
+    const col = columns.find(c => c.key === sortCol);
+    const sorted = [...data].sort((a, b) => {
+      const va = col.valueFn(a);
+      const vb = col.valueFn(b);
+      if (typeof va === 'number' && typeof vb === 'number') return sortDir === 'asc' ? va - vb : vb - va;
+      const sa = String(va || '').toLowerCase(), sb = String(vb || '').toLowerCase();
+      return sortDir === 'asc' ? sa.localeCompare(sb) : sb.localeCompare(sa);
+    });
+    tableEl.querySelector('tbody').innerHTML = sorted.map(renderRowFn).join('');
+    // Update header arrows
+    tableEl.querySelectorAll('th').forEach(th => {
+      th.classList.toggle('sort-active', th.dataset.sortKey === sortCol);
+      const arrow = th.querySelector('.sort-arrow');
+      if (arrow) arrow.textContent = th.dataset.sortKey === sortCol ? (sortDir === 'asc' ? '▲' : '▼') : '▲';
+    });
   }
 
-  const rows = sorted.map(c => `<tr>
-    <td>${c.name || '-'}</td>
-    <td>${c.fullState || c.state || '-'}</td>
-    <td>${c.ownership || '-'}</td>
-    <td>${c.msgsSent || 0}</td>
-    <td>${getStatusLabel(c)}</td>
-  </tr>`).join('');
+  // Render headers
+  tableEl.querySelector('thead tr').innerHTML = columns.map(col =>
+    `<th data-sort-key="${col.key}">${col.label} <span class="sort-arrow">▲</span></th>`
+  ).join('');
 
+  // Wire click
+  tableEl.querySelectorAll('th').forEach(th => {
+    th.addEventListener('click', function() {
+      const key = this.dataset.sortKey;
+      if (sortCol === key) { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; }
+      else { sortCol = key; sortDir = columns.find(c => c.key === key)?.defaultDir || 'asc'; }
+      doSort();
+    });
+  });
+
+  doSort();
+}
+
+function getFunnelStatusLabel(c) {
+  if (c.inPipeline) return `<span class="drilldown-medium drilldown-medium-email">${c.pipelineStatus || 'Pipeline'}</span>`;
+  if (c.assistedMeeting) return '<span class="drilldown-medium drilldown-medium-vm">Meeting</span>';
+  if (c.scheduledIntro) return '<span class="drilldown-medium drilldown-medium-linkedin">Intro Scheduled</span>';
+  if (c.responded) return '<span class="drilldown-medium drilldown-medium-text">Responded</span>';
+  if (c.msgsSent > 0) return '<span class="drilldown-medium drilldown-medium-call">Contacted</span>';
+  return '<span class="drilldown-medium drilldown-medium-default">Not Contacted</span>';
+}
+function getFunnelStatusRank(c) {
+  if (c.inPipeline) return 5;
+  if (c.assistedMeeting) return 4;
+  if (c.scheduledIntro) return 3;
+  if (c.responded) return 2;
+  if (c.msgsSent > 0) return 1;
+  return 0;
+}
+
+function renderFunnelDrilldown(step) {
   document.getElementById('funnelDrilldown').innerHTML = `
     <div class="drilldown-panel">
       <div class="drilldown-header">
@@ -4042,14 +4085,30 @@ function renderFunnelDrilldown(step) {
       </div>
       <div class="drilldown-table-wrap">
         <table class="drilldown-table">
-          <thead><tr>
-            <th>Company</th><th>State</th><th>Ownership</th><th>Msgs Sent</th><th>Status</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
+          <thead><tr></tr></thead>
+          <tbody></tbody>
         </table>
       </div>
     </div>
   `;
+
+  const tableEl = document.querySelector('#funnelDrilldown .drilldown-table');
+  const columns = [
+    { key: 'company', label: 'Company', valueFn: c => c.name || '', defaultDir: 'asc' },
+    { key: 'state', label: 'State', valueFn: c => c.fullState || c.state || '', defaultDir: 'asc' },
+    { key: 'ownership', label: 'Ownership', valueFn: c => c.ownership || '', defaultDir: 'asc' },
+    { key: 'msgs', label: 'Msgs Sent', valueFn: c => c.msgsSent || 0, defaultDir: 'desc' },
+    { key: 'status', label: 'Status', valueFn: c => getFunnelStatusRank(c), defaultDir: 'desc' },
+  ];
+  const renderRow = c => `<tr>
+    <td>${c.name || '-'}</td>
+    <td>${c.fullState || c.state || '-'}</td>
+    <td>${c.ownership || '-'}</td>
+    <td>${c.msgsSent || 0}</td>
+    <td>${getFunnelStatusLabel(c)}</td>
+  </tr>`;
+
+  wireDrilldownSort(tableEl, step.companies, columns, renderRow);
 }
 
 function makeDonut(containerId, data, colors, opts = {}) {
@@ -4610,23 +4669,6 @@ function getMediumClass(medium) {
 
 function renderDrilldown(title, msgs, formatBucketLabel, isPreformatted) {
   if (!isPreformatted) title = formatBucketLabel(title);
-  // Sort by date descending
-  const sorted = [...msgs].sort((a, b) => {
-    const da = a.date ? parseDateStr(a.date).getTime() : 0;
-    const db = b.date ? parseDateStr(b.date).getTime() : 0;
-    return db - da;
-  });
-
-  const rows = sorted.map(m => {
-    const medClass = getMediumClass(m.medium);
-    return `<tr>
-      <td>${m.date || '-'}</td>
-      <td>${m.contact || '-'}</td>
-      <td>${m.company || '-'}</td>
-      <td><span class="drilldown-medium ${medClass}">${m.medium || '-'}</span></td>
-      <td>${m.account || '-'}</td>
-    </tr>`;
-  }).join('');
 
   document.getElementById('dailyDrilldown').innerHTML = `
     <div class="drilldown-panel">
@@ -4636,14 +4678,33 @@ function renderDrilldown(title, msgs, formatBucketLabel, isPreformatted) {
       </div>
       <div class="drilldown-table-wrap">
         <table class="drilldown-table">
-          <thead><tr>
-            <th>Date</th><th>Contact</th><th>Company</th><th>Method</th><th>Account</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
+          <thead><tr></tr></thead>
+          <tbody></tbody>
         </table>
       </div>
     </div>
   `;
+
+  const tableEl = document.querySelector('#dailyDrilldown .drilldown-table');
+  const columns = [
+    { key: 'date', label: 'Date', valueFn: m => m.date ? parseDateStr(m.date).getTime() : 0, defaultDir: 'desc' },
+    { key: 'contact', label: 'Contact', valueFn: m => m.contact || '', defaultDir: 'asc' },
+    { key: 'company', label: 'Company', valueFn: m => m.company || '', defaultDir: 'asc' },
+    { key: 'method', label: 'Method', valueFn: m => m.medium || '', defaultDir: 'asc' },
+    { key: 'account', label: 'Account', valueFn: m => m.account || '', defaultDir: 'asc' },
+  ];
+  const renderRow = m => {
+    const medClass = getMediumClass(m.medium);
+    return `<tr>
+      <td>${m.date || '-'}</td>
+      <td>${m.contact || '-'}</td>
+      <td>${m.company || '-'}</td>
+      <td><span class="drilldown-medium ${medClass}">${m.medium || '-'}</span></td>
+      <td>${m.account || '-'}</td>
+    </tr>`;
+  };
+
+  wireDrilldownSort(tableEl, msgs, columns, renderRow);
 }
 
 function formatDayLabel(isoKey, mode) {
