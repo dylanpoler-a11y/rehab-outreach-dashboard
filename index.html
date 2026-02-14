@@ -1139,14 +1139,13 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="charts-section" id="chartsSection">
         <div class="chart-card full-width animate-in" id="dailyOutreachCard">
           <div class="chart-header">
-            <div class="chart-title">Daily Cold Outreach Volume</div>
+            <div class="chart-title">Cold Outreach Volume</div>
             <div class="daily-outreach-controls">
               <div class="daily-outreach-filters" id="dailyRangeFilters">
-                <button class="daily-filter-btn active" data-range="week">Week</button>
-                <button class="daily-filter-btn" data-range="month">Month</button>
-                <button class="daily-filter-btn" data-range="quarter">Quarter</button>
-                <button class="daily-filter-btn" data-range="year">Year</button>
-                <button class="daily-filter-btn" data-range="all">All</button>
+                <button class="daily-filter-btn active" data-range="daily">Daily</button>
+                <button class="daily-filter-btn" data-range="weekly">Weekly</button>
+                <button class="daily-filter-btn" data-range="monthly">Monthly</button>
+                <button class="daily-filter-btn" data-range="quarterly">Quarterly</button>
               </div>
               <div class="daily-outreach-filters" id="dailyChannelFilters"></div>
             </div>
@@ -4000,7 +3999,7 @@ function updateActivityChart() {
 // ============================================================
 // DAILY OUTREACH CHART
 // ============================================================
-let dailyRange = 'week';
+let dailyRange = 'daily';
 let dailyChannels = new Set(); // empty = all channels
 
 function getDailyOutreachData() {
@@ -4075,93 +4074,136 @@ function updateDailyOutreachChart() {
     filtered = messages.filter(m => dailyChannels.has(m.medium));
   }
 
-  // Calculate date range
+  // Parse all message dates upfront
   const now = new Date();
-  let startDate;
-  switch (dailyRange) {
-    case 'week': startDate = new Date(now); startDate.setDate(startDate.getDate() - 7); break;
-    case 'month': startDate = new Date(now); startDate.setMonth(startDate.getMonth() - 1); break;
-    case 'quarter': startDate = new Date(now); startDate.setMonth(startDate.getMonth() - 3); break;
-    case 'year': startDate = new Date(now); startDate.setFullYear(startDate.getFullYear() - 1); break;
-    default: startDate = null; // all time
-  }
-
-  // Filter by date range and aggregate by day
-  const dailyCounts = {};
-  let totalInRange = 0;
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const parsed = [];
   filtered.forEach(m => {
     if (!m.date) return;
     const d = parseDateStr(m.date);
-    if (isNaN(d.getTime())) return;
+    if (!isNaN(d.getTime())) parsed.push(d);
+  });
+
+  // Bucket helper: get the Monday of a date's week
+  function getMonday(d) {
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const mon = new Date(d);
+    mon.setDate(diff);
+    return mon.toISOString().split('T')[0];
+  }
+  // Bucket helper: get quarter key like "Q1 2025"
+  function getQuarter(d) {
+    const q = Math.floor(d.getMonth() / 3) + 1;
+    return `Q${q} ${d.getFullYear()}`;
+  }
+
+  // Determine date range and bucket function
+  let startDate;
+  let bucketFn, bucketMode;
+  switch (dailyRange) {
+    case 'daily':
+      startDate = new Date(now); startDate.setDate(startDate.getDate() - 14);
+      bucketFn = d => d.toISOString().split('T')[0];
+      bucketMode = 'day';
+      break;
+    case 'weekly':
+      startDate = new Date(now); startDate.setMonth(startDate.getMonth() - 3);
+      bucketFn = d => getMonday(d);
+      bucketMode = 'week';
+      break;
+    case 'monthly':
+      startDate = new Date(now); startDate.setFullYear(startDate.getFullYear() - 1);
+      bucketFn = d => d.toISOString().split('T')[0].slice(0, 7); // YYYY-MM
+      bucketMode = 'month';
+      break;
+    case 'quarterly':
+      startDate = null; // all time
+      bucketFn = d => getQuarter(d);
+      bucketMode = 'quarter';
+      break;
+  }
+
+  // Aggregate into buckets
+  const bucketMap = {};
+  const bucketOrder = [];
+  let totalInRange = 0;
+  parsed.forEach(d => {
     if (startDate && d < startDate) return;
-    // Format as YYYY-MM-DD for grouping
-    const key = d.toISOString().split('T')[0];
-    dailyCounts[key] = (dailyCounts[key] || 0) + 1;
+    const key = bucketFn(d);
+    if (!bucketMap[key]) { bucketMap[key] = 0; bucketOrder.push(key); }
+    bucketMap[key]++;
     totalInRange++;
   });
 
-  // Fill in missing days in range
-  const dayKeys = [];
-  if (startDate) {
-    const cursor = new Date(startDate);
-    cursor.setHours(0, 0, 0, 0);
+  // Fill gaps for continuous axes
+  let entries = [];
+  if (bucketMode === 'day') {
+    const cursor = new Date(startDate); cursor.setHours(0,0,0,0);
     while (cursor <= now) {
-      dayKeys.push(cursor.toISOString().split('T')[0]);
+      const k = cursor.toISOString().split('T')[0];
+      entries.push({ key: k, val: bucketMap[k] || 0 });
       cursor.setDate(cursor.getDate() + 1);
     }
+  } else if (bucketMode === 'week') {
+    const cursor = new Date(startDate); cursor.setHours(0,0,0,0);
+    // Advance to Monday
+    const day = cursor.getDay();
+    cursor.setDate(cursor.getDate() - day + (day === 0 ? -6 : 1));
+    while (cursor <= now) {
+      const k = cursor.toISOString().split('T')[0];
+      entries.push({ key: k, val: bucketMap[k] || 0 });
+      cursor.setDate(cursor.getDate() + 7);
+    }
+  } else if (bucketMode === 'month') {
+    const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    const endMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    while (cursor <= endMonth) {
+      const k = cursor.toISOString().split('T')[0].slice(0, 7);
+      entries.push({ key: k, val: bucketMap[k] || 0 });
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
   } else {
-    // All time: use all existing keys sorted
-    const allKeys = Object.keys(dailyCounts).sort();
-    if (allKeys.length > 0) {
-      const cursor = new Date(allKeys[0]);
-      const end = new Date(allKeys[allKeys.length - 1]);
-      while (cursor <= end) {
-        dayKeys.push(cursor.toISOString().split('T')[0]);
-        cursor.setDate(cursor.getDate() + 1);
+    // quarter — fill from earliest to latest
+    if (bucketOrder.length > 0) {
+      const firstD = parsed.filter(d => !startDate || d >= startDate).sort((a,b) => a - b)[0];
+      const startQ = Math.floor(firstD.getMonth() / 3);
+      const startY = firstD.getFullYear();
+      const endQ = Math.floor(now.getMonth() / 3);
+      const endY = now.getFullYear();
+      let cy = startY, cq = startQ;
+      while (cy < endY || (cy === endY && cq <= endQ)) {
+        const k = `Q${cq + 1} ${cy}`;
+        entries.push({ key: k, val: bucketMap[k] || 0 });
+        cq++;
+        if (cq > 3) { cq = 0; cy++; }
       }
     }
   }
 
-  const dayEntries = dayKeys.map(k => ({ key: k, val: dailyCounts[k] || 0 }));
-
-  // Aggregate into buckets based on range
-  // week/month → daily bars, quarter/year/all → monthly bars
-  let entries;
-  let bucketMode; // 'day' or 'month'
-  if (dailyRange === 'week' || dailyRange === 'month') {
-    entries = dayEntries;
-    bucketMode = 'day';
-  } else {
-    // quarter, year, all → aggregate by month
-    const monthMap = {};
-    const monthOrder = [];
-    dayEntries.forEach(e => {
-      const mk = e.key.slice(0, 7); // YYYY-MM
-      if (!monthMap[mk]) { monthMap[mk] = 0; monthOrder.push(mk); }
-      monthMap[mk] += e.val;
-    });
-    entries = monthOrder.map(k => ({ key: k, val: monthMap[k] }));
-    bucketMode = 'month';
-  }
-
   // Summary stats
-  const daysWithActivity = dayEntries.filter(e => e.val > 0).length;
-  const avgPerDay = dayEntries.length > 0 ? (totalInRange / Math.max(dayEntries.length, 1)).toFixed(1) : '0';
-  const avgPerMonth = entries.length > 0 && bucketMode === 'month' ? (totalInRange / Math.max(entries.length, 1)).toFixed(0) : null;
+  const avgVal = entries.length > 0 ? (totalInRange / entries.length).toFixed(bucketMode === 'day' ? 1 : 0) : '0';
   const maxEntry = entries.reduce((mx, e) => e.val > mx.val ? e : mx, { key: '', val: 0 });
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  let peakLabel;
-  if (bucketMode === 'month' && maxEntry.key) {
-    const [y, m] = maxEntry.key.split('-');
-    peakLabel = `${months[parseInt(m) - 1]} ${y}`;
-  } else {
-    peakLabel = maxEntry.key ? formatDayLabel(maxEntry.key, 'short') : '-';
+  const activeCount = entries.filter(e => e.val > 0).length;
+  const unitLabel = bucketMode === 'day' ? 'Day' : bucketMode === 'week' ? 'Week' : bucketMode === 'month' ? 'Month' : 'Quarter';
+  const unitLabelPlural = bucketMode === 'day' ? 'Days' : bucketMode === 'week' ? 'Weeks' : bucketMode === 'month' ? 'Months' : 'Quarters';
+
+  function formatBucketLabel(key) {
+    if (bucketMode === 'day') return formatDayLabel(key, 'short');
+    if (bucketMode === 'week') return 'Wk of ' + formatDayLabel(key, 'short');
+    if (bucketMode === 'month') {
+      const [y, m] = key.split('-');
+      return `${MONTHS[parseInt(m) - 1]} ${y}`;
+    }
+    return key; // Q1 2025
   }
+
+  const peakLabel = maxEntry.key ? formatBucketLabel(maxEntry.key) : '-';
 
   document.getElementById('dailyOutreachSummary').innerHTML = `
     <div class="daily-summary-stat"><span class="daily-summary-val">${totalInRange}</span><span class="daily-summary-label">Total in Period</span></div>
-    <div class="daily-summary-stat"><span class="daily-summary-val">${bucketMode === 'month' ? avgPerMonth : avgPerDay}</span><span class="daily-summary-label">Avg / ${bucketMode === 'month' ? 'Month' : 'Day'}</span></div>
-    <div class="daily-summary-stat"><span class="daily-summary-val">${bucketMode === 'month' ? entries.filter(e => e.val > 0).length : daysWithActivity}</span><span class="daily-summary-label">Active ${bucketMode === 'month' ? 'Months' : 'Days'}</span></div>
+    <div class="daily-summary-stat"><span class="daily-summary-val">${avgVal}</span><span class="daily-summary-label">Avg / ${unitLabel}</span></div>
+    <div class="daily-summary-stat"><span class="daily-summary-val">${activeCount}</span><span class="daily-summary-label">Active ${unitLabelPlural}</span></div>
     <div class="daily-summary-stat"><span class="daily-summary-val">${maxEntry.val}</span><span class="daily-summary-label">Peak (${peakLabel})</span></div>
   `;
 
@@ -4172,26 +4214,20 @@ function updateDailyOutreachChart() {
   }
 
   const maxVal = Math.max(...entries.map(e => e.val), 1);
-  const showEvery = entries.length > 60 ? 4 : entries.length > 30 ? 2 : 1;
+  const showEvery = entries.length > 30 ? 2 : 1;
 
   document.getElementById('dailyOutreachChart').innerHTML = `
     <div class="daily-chart-bars">
       ${entries.map((e, i) => {
         const height = Math.max((e.val / maxVal) * 160, e.val > 0 ? 3 : 1);
         let label = '';
-        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         if (i % showEvery === 0) {
-          if (bucketMode === 'month') {
-            const [y, m] = e.key.split('-');
-            // Show "Jan" for quarter, "Jan '25" for year/all
-            label = dailyRange === 'quarter' ? months[parseInt(m) - 1] : `${months[parseInt(m) - 1]} '${y.slice(2)}`;
-          } else {
-            label = formatDayLabel(e.key, dailyRange === 'week' ? 'day' : 'short');
-          }
+          if (bucketMode === 'day') label = formatDayLabel(e.key, 'day');
+          else if (bucketMode === 'week') label = formatDayLabel(e.key, 'short');
+          else if (bucketMode === 'month') { const [y, m] = e.key.split('-'); label = `${MONTHS[parseInt(m) - 1]}`; }
+          else label = e.key; // Q1 2025
         }
-        const tooltip = bucketMode === 'month'
-          ? (() => { const [y, m] = e.key.split('-'); return `${months[parseInt(m) - 1]} ${y}: ${e.val} messages`; })()
-          : `${formatDayLabel(e.key, 'full')}: ${e.val} messages`;
+        const tooltip = `${formatBucketLabel(e.key)}: ${e.val} messages`;
         const barColor = e.val === 0 ? 'rgba(100,116,139,0.2)' : '';
         return `
           <div class="daily-chart-bar-wrap" title="${tooltip}">
