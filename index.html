@@ -360,7 +360,7 @@ body::before {
 .state-filter-badge:hover { background: rgba(59, 130, 246, 0.25); }
 .state-filter-badge svg { width: 12px; height: 12px; }
 
-.chart-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.chart-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
 .chart-header .chart-title { margin-bottom: 0; }
 
 /* Donut */
@@ -1247,7 +1247,15 @@ document.addEventListener('DOMContentLoaded', () => {
           <div id="dailyDrilldown"></div>
         </div>
         <div class="chart-card animate-in">
-          <div class="chart-title">Outreach Funnel</div>
+          <div class="chart-header">
+            <div class="chart-title">Outreach Funnel</div>
+            <div class="daily-date-range" id="funnelDateRange">
+              <input type="date" class="daily-date-input" id="funnelDateFrom" title="From date">
+              <span class="daily-date-sep">–</span>
+              <input type="date" class="daily-date-input" id="funnelDateTo" title="To date">
+              <button class="daily-date-clear" id="funnelDateClear" title="Clear date range">✕</button>
+            </div>
+          </div>
           <div class="funnel" id="funnelChart"></div>
           <div id="funnelDrilldown"></div>
         </div>
@@ -1264,7 +1272,15 @@ document.addEventListener('DOMContentLoaded', () => {
           <div id="stateDrilldown"></div>
         </div>
         <div class="chart-card animate-in">
-          <div class="chart-title">Messages by Channel</div>
+          <div class="chart-header">
+            <div class="chart-title">Messages by Channel</div>
+            <div class="daily-date-range" id="channelDateRange">
+              <input type="date" class="daily-date-input" id="channelDateFrom" title="From date">
+              <span class="daily-date-sep">–</span>
+              <input type="date" class="daily-date-input" id="channelDateTo" title="To date">
+              <button class="daily-date-clear" id="channelDateClear" title="Clear date range">✕</button>
+            </div>
+          </div>
           <div class="bar-chart" id="mediumBarChart"></div>
         </div>
         <div class="chart-card full-width animate-in">
@@ -2307,6 +2323,10 @@ function renderPipeline() {
 
   // Migrate manual nextAction text into proper action items
   migrateManualNextActions();
+
+  // Initialize date range pickers for funnel and channel charts
+  initFunnelDateRange();
+  initChannelDateRange();
 
   // Initialize action items system
   initActionItems();
@@ -3925,9 +3945,92 @@ function updateCharts() {
 }
 
 let funnelSelectedStep = null; // track which step is selected
+let funnelDateFrom = '';
+let funnelDateTo = '';
+let channelDateFrom = '';
+let channelDateTo = '';
+
+function filterCompaniesByDateRange(companies, dateFrom, dateTo) {
+  if (!dateFrom && !dateTo) return companies;
+  const from = dateFrom ? new Date(dateFrom + 'T00:00:00') : null;
+  const to = dateTo ? new Date(dateTo + 'T23:59:59') : null;
+  return companies.filter(c => {
+    // A company matches if any of its outreach dates fall within range
+    // Use lastMsg as primary (most recent activity), firstMsg as fallback
+    const dateStr = c.lastMsg || c.firstMsg;
+    if (!dateStr) return false;
+    const d = parseDateStr(dateStr);
+    if (isNaN(d.getTime())) return false;
+    if (from && d < from) return false;
+    if (to && d > to) return false;
+    return true;
+  });
+}
+
+function filterMessagesByDateRange(messages, dateFrom, dateTo) {
+  if (!dateFrom && !dateTo) return messages;
+  const from = dateFrom ? new Date(dateFrom + 'T00:00:00') : null;
+  const to = dateTo ? new Date(dateTo + 'T23:59:59') : null;
+  return messages.filter(m => {
+    if (!m.date) return false;
+    const d = parseDateStr(m.date);
+    if (isNaN(d.getTime())) return false;
+    if (from && d < from) return false;
+    if (to && d > to) return false;
+    return true;
+  });
+}
+
+function initFunnelDateRange() {
+  const fromInput = document.getElementById('funnelDateFrom');
+  const toInput = document.getElementById('funnelDateTo');
+  const clearBtn = document.getElementById('funnelDateClear');
+
+  function onChange() {
+    funnelDateFrom = fromInput.value || '';
+    funnelDateTo = toInput.value || '';
+    fromInput.classList.toggle('active', !!funnelDateFrom);
+    toInput.classList.toggle('active', !!funnelDateTo);
+    clearBtn.classList.toggle('visible', !!(funnelDateFrom || funnelDateTo));
+    updateFunnel();
+  }
+  fromInput.addEventListener('change', onChange);
+  toInput.addEventListener('change', onChange);
+  clearBtn.addEventListener('click', () => {
+    funnelDateFrom = ''; funnelDateTo = '';
+    fromInput.value = ''; toInput.value = '';
+    fromInput.classList.remove('active'); toInput.classList.remove('active');
+    clearBtn.classList.remove('visible');
+    updateFunnel();
+  });
+}
+
+function initChannelDateRange() {
+  const fromInput = document.getElementById('channelDateFrom');
+  const toInput = document.getElementById('channelDateTo');
+  const clearBtn = document.getElementById('channelDateClear');
+
+  function onChange() {
+    channelDateFrom = fromInput.value || '';
+    channelDateTo = toInput.value || '';
+    fromInput.classList.toggle('active', !!channelDateFrom);
+    toInput.classList.toggle('active', !!channelDateTo);
+    clearBtn.classList.toggle('visible', !!(channelDateFrom || channelDateTo));
+    updateMediumChart();
+  }
+  fromInput.addEventListener('change', onChange);
+  toInput.addEventListener('change', onChange);
+  clearBtn.addEventListener('click', () => {
+    channelDateFrom = ''; channelDateTo = '';
+    fromInput.value = ''; toInput.value = '';
+    fromInput.classList.remove('active'); toInput.classList.remove('active');
+    clearBtn.classList.remove('visible');
+    updateMediumChart();
+  });
+}
 
 function updateFunnel() {
-  const d = filteredData;
+  const d = filterCompaniesByDateRange(filteredData, funnelDateFrom, funnelDateTo);
   const total = d.length;
   const contacted = d.filter(c => c.msgsSent > 0);
   const responded = d.filter(c => c.responded);
@@ -4374,9 +4477,17 @@ function clearStateFilter() {
 
 function updateMediumChart() {
   const counts = {};
-  filteredData.forEach(c => {
-    if (c.byMedium) Object.entries(c.byMedium).forEach(([k, v]) => { counts[k] = (counts[k] || 0) + v; });
-  });
+  if (channelDateFrom || channelDateTo) {
+    // Use per-message data filtered by date range
+    const allMsgs = getDailyOutreachData();
+    const filtered = filterMessagesByDateRange(allMsgs, channelDateFrom, channelDateTo);
+    filtered.forEach(m => { if (m.medium) counts[m.medium] = (counts[m.medium] || 0) + 1; });
+  } else {
+    // Default: use company-level aggregated data
+    filteredData.forEach(c => {
+      if (c.byMedium) Object.entries(c.byMedium).forEach(([k, v]) => { counts[k] = (counts[k] || 0) + v; });
+    });
+  }
   const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
   const colors = ['#06b6d4', '#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ec4899', '#f43f5e'];
   makeBarChart('mediumBarChart', sorted, colors);
