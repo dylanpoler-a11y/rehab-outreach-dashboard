@@ -1650,18 +1650,18 @@ function showOperatingStates(company, hqColor) {
   if (!company.lat || !company.lng) return;
 
   activeGhostCompany = company.name;
-  const hqState = (company.fullState || company.state || '').trim();
   const states = company.allStates.split(',').map(s => s.trim()).filter(s => s);
+
+  // Determine which state the marker is actually plotted in
+  // Prefer address-derived state (handles mismatches like Warriors Heart: fullState=Virginia but address in TX)
+  const addrMatch = (company.address || '').match(/,\s*([A-Z]{2})\s+\d{5}/);
+  const markerStateAbbr = addrMatch ? addrMatch[1] : (company.state || (STATE_ABBREV_JS[company.fullState] || '')).toUpperCase();
 
   // Build reverse lookup: abbreviation -> full name
   const ABBREV_TO_FULL = {};
   Object.entries(STATE_ABBREV_JS).forEach(([full, ab]) => { ABBREV_TO_FULL[ab] = full; });
 
   states.forEach(stateName => {
-    // Skip the HQ state — it already has the main dot
-    if (stateName === hqState) return;
-    // Also skip if abbreviation matches HQ state abbreviation
-    const hqAbbr = STATE_ABBREV_JS[hqState] || hqState;
     // Resolve to abbreviation to get coords (handle both full names and abbreviations)
     let abbr = stateName;
     let displayName = stateName;
@@ -1673,7 +1673,8 @@ function showOperatingStates(company, hqColor) {
       displayName = ABBREV_TO_FULL[abbr] || stateName;
     }
     if (abbr.length > 2) return; // couldn't resolve
-    if (abbr === hqAbbr) return; // skip HQ state
+    // Skip the state where the marker is actually plotted
+    if (abbr === markerStateAbbr) return;
     const coords = STATE_COORDS_JS[abbr];
     if (!coords) return;
 
