@@ -441,7 +441,7 @@ def main():
         for comp_id in company_ids_for_msg:
             c = company_by_id.get(comp_id)
             if c:
-                msg_companies.append(c['fields'].get('Name', ''))
+                msg_companies.append(c.get('name', ''))
 
         all_messages.append({
             'date': date_str,
