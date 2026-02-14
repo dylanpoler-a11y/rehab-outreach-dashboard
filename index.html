@@ -855,17 +855,6 @@ body::before {
 .toast.pending { background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3); color: #3b82f6; }
 
 /* Monthly activity chart */
-.activity-chart { position: relative; height: 180px; }
-.activity-bars { display: flex; align-items: flex-end; gap: 3px; height: 150px; padding: 0 4px; }
-.activity-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
-.activity-bar {
-  width: 100%; border-radius: 4px 4px 0 0;
-  background: linear-gradient(180deg, var(--accent-blue), var(--accent-cyan));
-  transition: height 0.8s ease; min-height: 2px; position: relative;
-}
-.activity-bar:hover { opacity: 0.8; }
-.activity-bar-label { font-size: 8px; color: var(--text-muted); transform: rotate(-45deg); white-space: nowrap; }
-.activity-bar-val { font-size: 9px; color: var(--text-secondary); font-weight: 600; }
 
 /* Daily outreach chart */
 .daily-outreach-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -1282,10 +1271,6 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
           </div>
           <div class="bar-chart" id="mediumBarChart"></div>
-        </div>
-        <div class="chart-card full-width animate-in">
-          <div class="chart-title">Monthly Outreach Activity</div>
-          <div class="activity-chart" id="activityChart"></div>
         </div>
         <div class="chart-card animate-in">
           <div class="chart-title">Messages by Team Member</div>
@@ -3940,7 +3925,6 @@ function updateCharts() {
   updateMediumChart();
   updateAccountChart();
   updateTierDonut();
-  updateActivityChart();
   initDailyOutreachChart();
 }
 
@@ -4501,32 +4485,6 @@ function updateAccountChart() {
   const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
   const colors = ['#8b5cf6', '#3b82f6', '#06b6d4', '#10b981', '#f59e0b'];
   makeBarChart('accountBarChart', sorted, colors);
-}
-
-function updateActivityChart() {
-  const monthly = DATA.meta.monthlyCounts || {};
-  const entries = Object.entries(monthly).sort((a, b) => a[0].localeCompare(b[0]));
-  if (entries.length === 0) { document.getElementById('activityChart').innerHTML = '<div style="color:var(--text-muted);font-size:13px">No monthly data available</div>'; return; }
-  const maxVal = Math.max(...entries.map(e => e[1]), 1);
-
-  const monthNames = { '01': 'Jan', '02': 'Feb', '03': 'Mar', '04': 'Apr', '05': 'May', '06': 'Jun', '07': 'Jul', '08': 'Aug', '09': 'Sep', '10': 'Oct', '11': 'Nov', '12': 'Dec' };
-
-  document.getElementById('activityChart').innerHTML = `
-    <div class="activity-bars">
-      ${entries.map(([key, val]) => {
-        const [year, month] = key.split('-');
-        const label = `${monthNames[month]} '${year.slice(2)}`;
-        const height = Math.max((val / maxVal) * 140, 4);
-        return `
-          <div class="activity-bar-wrap" title="${label}: ${val} messages">
-            <div class="activity-bar-val">${val}</div>
-            <div class="activity-bar" style="height:${height}px"></div>
-            <div class="activity-bar-label">${label}</div>
-          </div>
-        `;
-      }).join('')}
-    </div>
-  `;
 }
 
 // ============================================================
