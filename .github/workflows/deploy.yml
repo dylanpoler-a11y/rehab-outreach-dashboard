@@ -25,6 +25,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Fetch data from Airtable
+        continue-on-error: true
         env:
           AIRTABLE_PAT: ${{ secrets.AIRTABLE_PAT }}
         run: python fetch_airtable.py
