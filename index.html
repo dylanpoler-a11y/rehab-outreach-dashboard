@@ -973,6 +973,16 @@ body::before {
 .drilldown-medium-email { background: rgba(245,158,11,0.15); color: #fbbf24; }
 .drilldown-medium-default { background: rgba(148,163,184,0.1); color: var(--text-muted); }
 .drilldown-count { font-size: 11px; color: var(--text-muted); margin-left: 8px; }
+.drilldown-company { display: inline-flex; align-items: center; gap: 5px; }
+.drilldown-company a { color: var(--accent-blue); text-decoration: none; }
+.drilldown-company a:hover { text-decoration: underline; }
+.drilldown-at-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 3px; font-size: 9px; font-weight: 800;
+  background: rgba(252,196,25,0.15); color: #fcc419; text-decoration: none;
+  border: 1px solid rgba(252,196,25,0.25); flex-shrink: 0; line-height: 1;
+}
+.drilldown-at-btn:hover { background: rgba(252,196,25,0.3); border-color: rgba(252,196,25,0.5); }
 
 /* Table view */
 .table-container { display: none; padding: 0 24px 24px; overflow-x: auto; }
@@ -4172,6 +4182,12 @@ function wireDrilldownSort(tableEl, data, columns, renderRowFn) {
   doSort();
 }
 
+function drilldownCompanyCell(name, website, airtableId) {
+  const nameHtml = website ? `<a href="${website}" target="_blank">${name}</a>` : name;
+  const atBtn = airtableId ? ` <a class="drilldown-at-btn" href="https://airtable.com/appsXvuuRisy7GiSH/tblO0w9kI3pE64B0B/${airtableId}" target="_blank" title="Open in Airtable">AT</a>` : '';
+  return `<span class="drilldown-company">${nameHtml}${atBtn}</span>`;
+}
+
 function getFunnelStatusLabel(c) {
   if (c.inPipeline) return `<span class="drilldown-medium drilldown-medium-email">${c.pipelineStatus || 'Pipeline'}</span>`;
   if (c.assistedMeeting) return '<span class="drilldown-medium drilldown-medium-vm">Assisted Meeting</span>';
@@ -4214,7 +4230,7 @@ function renderFunnelDrilldown(step) {
     { key: 'status', label: 'Status', valueFn: c => getFunnelStatusRank(c), defaultDir: 'desc' },
   ];
   const renderRow = c => `<tr>
-    <td>${c.name || '-'}</td>
+    <td>${drilldownCompanyCell(c.name || '-', c.website, c.airtableId)}</td>
     <td>${c.fullState || c.state || '-'}</td>
     <td>${c.ownership || '-'}</td>
     <td>${c.msgsSent || 0}</td>
@@ -4436,7 +4452,7 @@ function renderStateDrilldown(stateName, companies) {
     { key: 'status', label: 'Status', valueFn: c => getCompanyStatusRank(c), defaultDir: 'desc' },
   ];
   const renderRow = c => `<tr>
-    <td>${c.name || '-'}</td>
+    <td>${drilldownCompanyCell(c.name || '-', c.website, c.airtableId)}</td>
     <td>${c.ownership || '-'}</td>
     <td>${c.msgsSent || 0}</td>
     <td>${getCompanyStatusLabel(c)}</td>
@@ -4873,10 +4889,11 @@ function renderDrilldown(title, msgs, formatBucketLabel, isPreformatted) {
   ];
   const renderRow = m => {
     const medClass = getMediumClass(m.medium);
+    const comp = m.company ? DATA.companies.find(c => c.name === m.company) : null;
     return `<tr>
       <td>${m.date || '-'}</td>
       <td>${m.contact || '-'}</td>
-      <td>${m.company || '-'}</td>
+      <td>${m.company ? drilldownCompanyCell(m.company, comp?.website, comp?.airtableId) : '-'}</td>
       <td><span class="drilldown-medium ${medClass}">${m.medium || '-'}</span></td>
       <td>${m.account || '-'}</td>
     </tr>`;
