@@ -1066,6 +1066,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <select class="action-toolbar-select" id="actionFilterPriority"><option value="">All Priorities</option><option>URGENT</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option></select>
               <select class="action-toolbar-select" id="actionFilterStatus"><option value="">All Statuses</option><option>Overdue</option><option>Pending</option><option>Scheduled</option><option>Planning</option><option>Waiting</option><option>Not Started</option><option>Stalled</option></select>
               <select class="action-toolbar-select" id="actionFilterOwner"></select>
+              <select class="action-toolbar-select" id="actionFilterFacility"></select>
             </div>
             <div class="action-toolbar-sep"></div>
             <div class="action-toolbar-group">
@@ -2235,8 +2236,16 @@ function initActionItems() {
     ownerSelect.innerHTML = '<option value="">All Owners</option>' + [...owners].sort().map(o => `<option>${o}</option>`).join('');
   }
 
+  // Populate facility filter from data
+  const facilitySelect = document.getElementById('actionFilterFacility');
+  if (facilitySelect) {
+    const facilities = new Set();
+    (DATA.actions || []).forEach(a => { if (a.facility) facilities.add(a.facility.trim()); });
+    facilitySelect.innerHTML = '<option value="">All Facilities</option>' + [...facilities].sort().map(f => `<option>${f}</option>`).join('');
+  }
+
   // Wire toolbar controls
-  ['actionFilterPriority', 'actionFilterStatus', 'actionFilterOwner', 'actionSort', 'actionGroupBy'].forEach(id => {
+  ['actionFilterPriority', 'actionFilterStatus', 'actionFilterOwner', 'actionFilterFacility', 'actionSort', 'actionGroupBy'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.addEventListener('change', renderActionItems);
   });
@@ -2273,10 +2282,12 @@ function renderActionItems() {
   const fPriority = document.getElementById('actionFilterPriority')?.value || '';
   const fStatus = document.getElementById('actionFilterStatus')?.value || '';
   const fOwner = document.getElementById('actionFilterOwner')?.value || '';
+  const fFacility = document.getElementById('actionFilterFacility')?.value || '';
 
   if (fPriority) items = items.filter(a => a.priority === fPriority);
   if (fStatus) items = items.filter(a => a.status === fStatus);
   if (fOwner) items = items.filter(a => (a.owner || '').includes(fOwner));
+  if (fFacility) items = items.filter(a => (a.facility || '').trim() === fFacility);
 
   // Hide done unless toggled
   if (!actionShowDone) items = items.filter(a => !a._done);
