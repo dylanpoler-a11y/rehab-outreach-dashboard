@@ -4122,12 +4122,49 @@ function updateDailyOutreachChart() {
     }
   }
 
-  const entries = dayKeys.map(k => ({ key: k, val: dailyCounts[k] || 0 }));
+  const dayEntries = dayKeys.map(k => ({ key: k, val: dailyCounts[k] || 0 }));
+
+  // Aggregate into buckets based on range
+  // week/month → daily, quarter/year → weekly, all → monthly
+  let entries;
+  let bucketMode; // 'day', 'week', 'month'
+  if (dailyRange === 'week' || dailyRange === 'month') {
+    entries = dayEntries;
+    bucketMode = 'day';
+  } else if (dailyRange === 'quarter' || dailyRange === 'year') {
+    // Aggregate by ISO week (Monday-start)
+    const weekMap = {};
+    const weekOrder = [];
+    dayEntries.forEach(e => {
+      const d = new Date(e.key + 'T12:00:00');
+      // Get Monday of this week
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(d);
+      monday.setDate(diff);
+      const wk = monday.toISOString().split('T')[0];
+      if (!weekMap[wk]) { weekMap[wk] = 0; weekOrder.push(wk); }
+      weekMap[wk] += e.val;
+    });
+    entries = weekOrder.map(k => ({ key: k, val: weekMap[k] }));
+    bucketMode = 'week';
+  } else {
+    // All time → aggregate by month
+    const monthMap = {};
+    const monthOrder = [];
+    dayEntries.forEach(e => {
+      const mk = e.key.slice(0, 7); // YYYY-MM
+      if (!monthMap[mk]) { monthMap[mk] = 0; monthOrder.push(mk); }
+      monthMap[mk] += e.val;
+    });
+    entries = monthOrder.map(k => ({ key: k, val: monthMap[k] }));
+    bucketMode = 'month';
+  }
 
   // Summary stats
-  const daysWithActivity = entries.filter(e => e.val > 0).length;
-  const avgPerDay = daysWithActivity > 0 ? (totalInRange / Math.max(entries.length, 1)).toFixed(1) : '0';
-  const maxDay = entries.reduce((mx, e) => e.val > mx.val ? e : mx, { key: '', val: 0 });
+  const daysWithActivity = dayEntries.filter(e => e.val > 0).length;
+  const avgPerDay = dayEntries.length > 0 ? (totalInRange / Math.max(dayEntries.length, 1)).toFixed(1) : '0';
+  const maxDay = dayEntries.reduce((mx, e) => e.val > mx.val ? e : mx, { key: '', val: 0 });
   const maxDayLabel = maxDay.key ? formatDayLabel(maxDay.key, 'short') : '-';
 
   document.getElementById('dailyOutreachSummary').innerHTML = `
@@ -4144,17 +4181,32 @@ function updateDailyOutreachChart() {
   }
 
   const maxVal = Math.max(...entries.map(e => e.val), 1);
-  // For large ranges, show fewer labels
-  const showEvery = entries.length > 90 ? 14 : entries.length > 30 ? 7 : entries.length > 14 ? 2 : 1;
+  const showEvery = entries.length > 60 ? 4 : entries.length > 30 ? 2 : 1;
 
   document.getElementById('dailyOutreachChart').innerHTML = `
     <div class="daily-chart-bars">
       ${entries.map((e, i) => {
         const height = Math.max((e.val / maxVal) * 160, e.val > 0 ? 3 : 1);
-        const label = i % showEvery === 0 ? formatDayLabel(e.key, dailyRange === 'week' ? 'day' : 'short') : '';
+        let label = '';
+        if (i % showEvery === 0) {
+          if (bucketMode === 'month') {
+            const [y, m] = e.key.split('-');
+            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            label = `${months[parseInt(m) - 1]} ${y.slice(2)}`;
+          } else if (bucketMode === 'week') {
+            label = formatDayLabel(e.key, 'short');
+          } else {
+            label = formatDayLabel(e.key, dailyRange === 'week' ? 'day' : 'short');
+          }
+        }
+        const tooltip = bucketMode === 'month'
+          ? `${e.key}: ${e.val} messages`
+          : bucketMode === 'week'
+            ? `Week of ${formatDayLabel(e.key, 'full')}: ${e.val} messages`
+            : `${formatDayLabel(e.key, 'full')}: ${e.val} messages`;
         const barColor = e.val === 0 ? 'rgba(100,116,139,0.2)' : '';
         return `
-          <div class="daily-chart-bar-wrap" title="${formatDayLabel(e.key, 'full')}: ${e.val} messages">
+          <div class="daily-chart-bar-wrap" title="${tooltip}">
             ${e.val > 0 ? `<div class="daily-chart-bar-val">${e.val}</div>` : ''}
             <div class="daily-chart-bar" style="height:${height}px;${barColor ? 'background:' + barColor : ''}"></div>
             <div class="daily-chart-bar-label">${label}</div>
