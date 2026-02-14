@@ -1938,6 +1938,9 @@ function buildFilters() {
     { key: 'due_diligence', label: 'Due Diligence', color: '#8b5cf6', count: pipe.filter(p => p.status.includes('Due Diligence') || p.status.includes('Placing Bid')).length },
   ];
   const pipeEl = document.getElementById('pipelineFilters');
+  // Clear existing children to prevent duplicates on re-render
+  if (pipeEl._sortableInstance) { pipeEl._sortableInstance.destroy(); pipeEl._sortableInstance = null; }
+  pipeEl.innerHTML = '';
   const pipelineFns = {
     'active': c => c.inPipeline && c.pipelineStatus && c.pipelineStatus.startsWith('Active'),
     'new_lead': c => c.inPipeline && c.pipelineStatus === 'New Lead',
@@ -1950,6 +1953,7 @@ function buildFilters() {
     filterDefs['pipeline:' + item.key] = { fn, type: 'pipeline', key: item.key, color: item.color };
     const btn = document.createElement('div');
     btn.className = 'filter-btn';
+    if (activeFilters.pipeline && activeFilters.pipeline.has(item.key)) btn.classList.add('active');
     btn.dataset.filterType = 'pipeline';
     btn.dataset.filterKey = item.key;
     btn.dataset.filterColor = item.color;
@@ -1970,7 +1974,7 @@ function buildFilters() {
 
   // Make pipeline filters drag-and-drop for color priority
   pipeEl.classList.add('sortable-filter');
-  new Sortable(pipeEl, {
+  pipeEl._sortableInstance = new Sortable(pipeEl, {
     animation: 200,
     ghostClass: 'sortable-ghost',
     chosenClass: 'sortable-chosen',
@@ -2031,11 +2035,17 @@ function renderFilterGroup(containerId, items, filterType, companies) {
   const el = document.getElementById(containerId);
   const isSortable = { outreachFilters: 'status', pipelineFilters: 'pipeline', ownershipFilters: 'ownership' }[containerId];
 
+  // Clear existing children to prevent duplicates on re-render
+  // Destroy Sortable instance first if one exists
+  if (el._sortableInstance) { el._sortableInstance.destroy(); el._sortableInstance = null; }
+  el.innerHTML = '';
+
   items.forEach(item => {
     const count = companies.filter(item.fn).length;
     filterDefs[filterType + ':' + item.key] = { fn: item.fn, type: filterType, key: item.key, color: item.color };
     const btn = document.createElement('div');
     btn.className = 'filter-btn';
+    if (activeFilters[filterType] && activeFilters[filterType].has(item.key)) btn.classList.add('active');
     btn.dataset.filterType = filterType;
     btn.dataset.filterKey = item.key;
     btn.dataset.filterColor = item.color;
@@ -2060,7 +2070,7 @@ function renderFilterGroup(containerId, items, filterType, companies) {
   // Make colorable sections drag-and-drop for priority reorder
   if (isSortable) {
     el.classList.add('sortable-filter');
-    new Sortable(el, {
+    el._sortableInstance = new Sortable(el, {
       animation: 200,
       ghostClass: 'sortable-ghost',
       chosenClass: 'sortable-chosen',
@@ -4606,7 +4616,7 @@ function updateAccountChart() {
 // DAILY OUTREACH CHART
 // ============================================================
 let dailyRange = 'monthly';
-let dailyChannels = new Set(); // empty = all channels
+let dailyChannels = new Set(['Phone Call', 'Text', 'Voicemail']); // default selection
 let chartHighlightCompanies = null; // Map of company name → msg count, null = no filter
 let chartHighlightMax = 0; // max msg count across highlighted companies
 let chartHeatByState = null; // Map of state name → msg count for heat map, null = off
