@@ -1502,6 +1502,16 @@ function initMap() {
   map = L.map('map', { center: [36, -96], zoom: 4, attributionControl: false, minZoom: 3, scrollWheelZoom: false });
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
 
+  // Allow pinch-to-zoom (ctrlKey wheel events) while blocking normal scroll zoom
+  map.getContainer().addEventListener('wheel', function(e) {
+    if (e.ctrlKey) {
+      e.preventDefault();
+      const delta = -e.deltaY;
+      const zoomDelta = delta > 0 ? 0.5 : -0.5;
+      map.zoomIn(zoomDelta, { animate: true });
+    }
+  }, { passive: false });
+
   // Add "Center" button to zoom controls
   const CenterControl = L.Control.extend({
     options: { position: 'topleft' },
