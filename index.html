@@ -424,6 +424,76 @@ body::before {
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
 }
 
+.add-deal-btn {
+  background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan));
+  color: #fff; border: none; border-radius: 8px; padding: 6px 16px;
+  font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit;
+  transition: opacity 0.2s, transform 0.1s;
+}
+.add-deal-btn:hover { opacity: 0.85; }
+.add-deal-btn:active { transform: scale(0.97); }
+
+.add-deal-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  z-index: 1600; backdrop-filter: blur(4px);
+}
+.add-deal-overlay.open { display: block; }
+
+.add-deal-modal {
+  display: none; position: fixed; z-index: 1700;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 440px; max-height: 85vh; overflow-y: auto;
+  background: var(--bg-secondary); border: 1px solid var(--border-bright);
+  border-radius: 16px; padding: 24px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  backdrop-filter: blur(20px); font-family: 'Inter', sans-serif;
+}
+.add-deal-modal.open { display: block; animation: popover-in 0.2s ease; }
+.add-deal-modal::-webkit-scrollbar { width: 6px; }
+.add-deal-modal::-webkit-scrollbar-track { background: transparent; }
+.add-deal-modal::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+
+.add-deal-body { display: flex; flex-direction: column; gap: 14px; }
+.add-deal-field { display: flex; flex-direction: column; gap: 4px; }
+
+.add-deal-search-wrap { position: relative; }
+.add-deal-dropdown {
+  display: none; position: absolute; top: 100%; left: 0; right: 0;
+  max-height: 220px; overflow-y: auto; z-index: 1800;
+  background: var(--bg-secondary); border: 1px solid var(--border-bright);
+  border-radius: 10px; margin-top: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.add-deal-dropdown.open { display: block; }
+.add-deal-dropdown::-webkit-scrollbar { width: 5px; }
+.add-deal-dropdown::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+
+.add-deal-option {
+  padding: 8px 12px; cursor: pointer; font-size: 12px;
+  color: var(--text-secondary); transition: background 0.1s;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.add-deal-option:hover { background: rgba(59,130,246,0.1); color: var(--text-primary); }
+.add-deal-option-name { font-weight: 600; color: var(--text-primary); }
+.add-deal-option-name mark { background: rgba(59,130,246,0.3); color: var(--text-primary); border-radius: 2px; }
+.add-deal-option-meta { font-size: 10px; color: var(--text-muted); }
+.add-deal-no-results { padding: 12px; font-size: 12px; color: var(--text-muted); font-style: italic; text-align: center; }
+
+.add-deal-selected {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3);
+  border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--accent-green);
+}
+.add-deal-selected-meta { font-size: 11px; font-weight: 400; color: var(--text-muted); }
+.add-deal-selected-clear {
+  margin-left: auto; background: none; border: none; color: var(--text-muted);
+  font-size: 16px; cursor: pointer; padding: 0 4px; line-height: 1;
+}
+.add-deal-selected-clear:hover { color: var(--text-primary); }
+.add-deal-already-in-pipeline {
+  font-size: 11px; color: var(--accent-orange); margin-top: 4px; font-style: italic;
+}
+
 .pipeline-stats { display: flex; gap: 16px; }
 
 .pipeline-stat {
@@ -1200,6 +1270,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="pipeline-section" id="pipelineSection">
           <div class="pipeline-header">
             <h2>Acquisition Pipeline</h2>
+            <button class="add-deal-btn" id="addDealBtn" title="Add existing company to pipeline">+ Add Deal</button>
             <div class="pipeline-stats" id="pipelineStats"></div>
           </div>
           <div class="pipeline-board" id="pipelineBoard"></div>
@@ -1313,6 +1384,61 @@ document.addEventListener('DOMContentLoaded', () => {
 
 <!-- Deal Edit Popover (singleton, repositioned per card) -->
 <div class="deal-edit-backdrop" id="dealEditBackdrop"></div>
+<div class="add-deal-overlay" id="addDealOverlay"></div>
+<div class="add-deal-modal" id="addDealModal">
+  <div class="deal-edit-header">
+    <div class="deal-edit-title">Add Deal to Pipeline</div>
+    <button class="deal-edit-close" id="addDealClose">&times;</button>
+  </div>
+  <div class="add-deal-body">
+    <div class="add-deal-field">
+      <div class="deal-edit-label">Company</div>
+      <div class="add-deal-search-wrap">
+        <input type="text" class="deal-edit-input" id="addDealSearch" placeholder="Search existing companies..." autocomplete="off">
+        <div class="add-deal-dropdown" id="addDealDropdown"></div>
+      </div>
+      <div class="add-deal-selected" id="addDealSelected" style="display:none">
+        <span id="addDealSelectedName"></span>
+        <span class="add-deal-selected-meta" id="addDealSelectedMeta"></span>
+        <button class="add-deal-selected-clear" id="addDealSelectedClear">&times;</button>
+      </div>
+    </div>
+    <div class="add-deal-field">
+      <div class="deal-edit-label">Status</div>
+      <div class="deal-edit-chips" id="addDealStatus" data-mode="single">
+        <button class="deal-edit-chip chip-new-lead selected" data-value="New Lead">New Lead</button>
+        <button class="deal-edit-chip chip-active" data-value="Active">Active</button>
+        <button class="deal-edit-chip chip-stand-by" data-value="Stand By">Stand By</button>
+        <button class="deal-edit-chip chip-due-diligence" data-value="Due Diligence">Due Diligence</button>
+      </div>
+    </div>
+    <div class="add-deal-field">
+      <div class="deal-edit-label">Priority</div>
+      <div class="deal-edit-chips" id="addDealPriority" data-mode="single">
+        <button class="deal-edit-chip chip-medium selected" data-value="2 - Medium">Medium</button>
+        <button class="deal-edit-chip chip-high" data-value="1 - High">High</button>
+        <button class="deal-edit-chip chip-low" data-value="3 - Low">Low</button>
+      </div>
+    </div>
+    <div class="add-deal-field">
+      <div class="deal-edit-label">Type</div>
+      <input type="text" class="deal-edit-input" id="addDealType" placeholder="e.g. Detox / RTC / PHP">
+    </div>
+    <div class="add-deal-field">
+      <div class="deal-edit-label">Key Contact</div>
+      <input type="text" class="deal-edit-input" id="addDealContact" placeholder="Contact name">
+    </div>
+    <div class="add-deal-field">
+      <div class="deal-edit-label">Notes</div>
+      <textarea class="deal-edit-input deal-edit-textarea" id="addDealNotes" placeholder="Initial notes..."></textarea>
+    </div>
+  </div>
+  <div class="deal-edit-actions">
+    <button class="deal-edit-cancel" id="addDealCancel">Cancel</button>
+    <button class="deal-edit-save" id="addDealSave">Add to Pipeline</button>
+  </div>
+</div>
+
 <div class="deal-edit-popover" id="dealEditPopover">
   <div class="deal-edit-header" id="dealEditHeader">
     <div class="deal-edit-title" id="dealEditTitle"></div>
@@ -1413,6 +1539,7 @@ async function init() {
   applyFilters();
   renderPipeline();
   initDealEditPopover();
+  initAddDealModal();
 }
 
 async function refreshData(silent = false) {
@@ -4004,6 +4131,221 @@ function initDealEditPopover() {
       isDraggingPopover = false;
       popover.style.transition = '';
     }
+  });
+}
+
+// ============================================================
+// ADD DEAL TO PIPELINE
+// ============================================================
+let addDealSelectedCompany = null;
+
+function openAddDealModal() {
+  addDealSelectedCompany = null;
+  document.getElementById('addDealSearch').value = '';
+  document.getElementById('addDealDropdown').classList.remove('open');
+  document.getElementById('addDealDropdown').innerHTML = '';
+  document.getElementById('addDealSelected').style.display = 'none';
+  document.getElementById('addDealSearch').parentElement.style.display = '';
+  document.getElementById('addDealType').value = '';
+  document.getElementById('addDealContact').value = '';
+  document.getElementById('addDealNotes').value = '';
+
+  // Reset chips to defaults
+  document.querySelectorAll('#addDealStatus .deal-edit-chip').forEach(c => c.classList.toggle('selected', c.dataset.value === 'New Lead'));
+  document.querySelectorAll('#addDealPriority .deal-edit-chip').forEach(c => c.classList.toggle('selected', c.dataset.value === '2 - Medium'));
+
+  document.getElementById('addDealOverlay').classList.add('open');
+  document.getElementById('addDealModal').classList.add('open');
+  setTimeout(() => document.getElementById('addDealSearch').focus(), 100);
+}
+
+function closeAddDealModal() {
+  document.getElementById('addDealOverlay').classList.remove('open');
+  document.getElementById('addDealModal').classList.remove('open');
+  addDealSelectedCompany = null;
+}
+
+function renderAddDealDropdown(query) {
+  const dropdown = document.getElementById('addDealDropdown');
+  const q = query.trim().toLowerCase();
+  if (!q) { dropdown.classList.remove('open'); dropdown.innerHTML = ''; return; }
+
+  const matches = DATA.companies.filter(c =>
+    c.name && c.name.toLowerCase().includes(q)
+  ).slice(0, 30);
+
+  if (matches.length === 0) {
+    dropdown.innerHTML = '<div class="add-deal-no-results">No matching companies</div>';
+    dropdown.classList.add('open');
+    return;
+  }
+
+  // Check which companies are already in pipeline
+  const pipelineNames = new Set((DATA.pipeline || []).map(p => p.name));
+
+  dropdown.innerHTML = matches.map(c => {
+    const idx = c.name.toLowerCase().indexOf(q);
+    const highlighted = c.name.substring(0, idx) + '<mark>' + c.name.substring(idx, idx + q.length) + '</mark>' + c.name.substring(idx + q.length);
+    const meta = [c.fullState || c.state, c.ownership].filter(Boolean).join(' · ');
+    const inPipeline = pipelineNames.has(c.name);
+    return `<div class="add-deal-option" data-company-name="${c.name.replace(/"/g, '&quot;')}">
+      <div class="add-deal-option-name">${highlighted}${inPipeline ? ' <span style="color:var(--accent-orange);font-size:10px">(in pipeline)</span>' : ''}</div>
+      ${meta ? `<div class="add-deal-option-meta">${meta}</div>` : ''}
+    </div>`;
+  }).join('');
+  dropdown.classList.add('open');
+}
+
+function selectAddDealCompany(companyName) {
+  const company = DATA.companies.find(c => c.name === companyName);
+  if (!company) return;
+
+  addDealSelectedCompany = company;
+
+  // Show selected, hide search
+  document.getElementById('addDealSearch').parentElement.style.display = 'none';
+  document.getElementById('addDealDropdown').classList.remove('open');
+  const sel = document.getElementById('addDealSelected');
+  sel.style.display = 'flex';
+  document.getElementById('addDealSelectedName').textContent = company.name;
+  const meta = [company.fullState || company.state, company.ownership].filter(Boolean).join(' · ');
+  document.getElementById('addDealSelectedMeta').textContent = meta;
+
+  // Auto-fill type from ownership if available
+  if (company.ownership && !document.getElementById('addDealType').value) {
+    document.getElementById('addDealType').value = company.ownership;
+  }
+
+  // Warn if already in pipeline
+  const existing = document.querySelector('.add-deal-already-in-pipeline');
+  if (existing) existing.remove();
+  const inPipeline = (DATA.pipeline || []).find(p => p.name === company.name);
+  if (inPipeline) {
+    const warn = document.createElement('div');
+    warn.className = 'add-deal-already-in-pipeline';
+    warn.textContent = `Already in pipeline as "${inPipeline.status}"`;
+    sel.parentElement.appendChild(warn);
+  }
+}
+
+async function submitAddDeal() {
+  if (!addDealSelectedCompany) {
+    showToast('Please select a company first', 'error');
+    return;
+  }
+
+  const company = addDealSelectedCompany;
+  const statusChip = document.querySelector('#addDealStatus .deal-edit-chip.selected');
+  const priorityChip = document.querySelector('#addDealPriority .deal-edit-chip.selected');
+  const status = statusChip ? statusChip.dataset.value : 'New Lead';
+  const priority = priorityChip ? priorityChip.dataset.value : '2 - Medium';
+  const type = document.getElementById('addDealType').value.trim();
+  const keyContact = document.getElementById('addDealContact').value.trim();
+  const notes = document.getElementById('addDealNotes').value.trim();
+  const states = company.fullState || company.state || '';
+
+  const dealData = {
+    name: company.name,
+    status,
+    priority,
+    type: type || company.ownership || '',
+    states,
+    keyContact,
+    notes,
+    ebitda: '',
+    askingPrice: '',
+    ndaStatus: 'N/A',
+    dataRoom: '',
+    siteVisit: '',
+    nextAction: '',
+    actionOwner: '',
+    deadline: '',
+    lastUpdate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    daysSinceUpdate: '0',
+    dealNumber: '',
+    airtableId: company.airtableId || '',
+  };
+
+  // Add locally immediately
+  DATA.pipeline.push(dealData);
+  renderPipeline();
+  closeAddDealModal();
+  showToast(`Adding "${company.name}" to pipeline...`, 'pending');
+
+  // Write to Google Sheet
+  if (APPS_SCRIPT_URL) {
+    try {
+      const resp = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ newDeal: dealData })
+      });
+      const result = await resp.json();
+      if (result.success) {
+        showToast(`"${company.name}" added to pipeline`, 'success');
+      } else {
+        showToast(`Sheet write failed: ${result.error || 'Unknown error'}`, 'error');
+      }
+    } catch (err) {
+      showToast('Added locally (sheet sync failed)', 'pending');
+      console.warn('New deal write-back error:', err.message);
+    }
+  }
+}
+
+function initAddDealModal() {
+  document.getElementById('addDealBtn').addEventListener('click', openAddDealModal);
+  document.getElementById('addDealClose').addEventListener('click', closeAddDealModal);
+  document.getElementById('addDealCancel').addEventListener('click', closeAddDealModal);
+  document.getElementById('addDealOverlay').addEventListener('click', closeAddDealModal);
+  document.getElementById('addDealSave').addEventListener('click', submitAddDeal);
+
+  // Company search
+  const searchInput = document.getElementById('addDealSearch');
+  searchInput.addEventListener('input', function() { renderAddDealDropdown(this.value); });
+  searchInput.addEventListener('focus', function() { if (this.value.trim()) renderAddDealDropdown(this.value); });
+
+  // Dropdown click
+  document.getElementById('addDealDropdown').addEventListener('mousedown', function(e) {
+    const option = e.target.closest('.add-deal-option');
+    if (option) {
+      e.preventDefault();
+      selectAddDealCompany(option.dataset.companyName);
+    }
+  });
+
+  // Clear selection
+  document.getElementById('addDealSelectedClear').addEventListener('click', function() {
+    addDealSelectedCompany = null;
+    document.getElementById('addDealSelected').style.display = 'none';
+    document.getElementById('addDealSearch').parentElement.style.display = '';
+    document.getElementById('addDealSearch').value = '';
+    document.getElementById('addDealType').value = '';
+    const warn = document.querySelector('.add-deal-already-in-pipeline');
+    if (warn) warn.remove();
+    setTimeout(() => document.getElementById('addDealSearch').focus(), 50);
+  });
+
+  // Chip selectors (single-select)
+  ['addDealStatus', 'addDealPriority'].forEach(id => {
+    document.getElementById(id).addEventListener('click', function(e) {
+      const chip = e.target.closest('.deal-edit-chip');
+      if (!chip) return;
+      this.querySelectorAll('.deal-edit-chip').forEach(c => c.classList.remove('selected'));
+      chip.classList.add('selected');
+    });
+  });
+
+  // Escape to close
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && document.getElementById('addDealModal').classList.contains('open')) {
+      closeAddDealModal();
+    }
+  });
+
+  // Hide dropdown on blur
+  document.getElementById('addDealSearch').addEventListener('blur', function() {
+    setTimeout(() => document.getElementById('addDealDropdown').classList.remove('open'), 150);
   });
 }
 

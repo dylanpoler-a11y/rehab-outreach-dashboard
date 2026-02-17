@@ -67,6 +67,14 @@ function doPost(e) {
     }
 
     // ============================================================
+    // PIPELINE: Create new deal
+    // Payload: { newDeal: { name, status, priority, type, states, ... } }
+    // ============================================================
+    if (data.newDeal) {
+      return handleNewDeal(ss, data.newDeal);
+    }
+
+    // ============================================================
     // PIPELINE: Deal updates (existing functionality)
     // ============================================================
     var dealName = data.dealName;
@@ -272,6 +280,75 @@ function handleActionDone(ss, actionItemText, isDone) {
   info.sheet.getRange(targetRow + 1, statusCol + 1).setValue(newStatus);
 
   return jsonResponse({ success: true, action: 'done', done: isDone });
+}
+
+// ============================================================
+// Handle new deal: append row to Pipeline Dashboard tab
+// ============================================================
+function handleNewDeal(ss, dealData) {
+  var sheet = ss.getSheetByName('Pipeline Dashboard');
+  if (!sheet) return jsonResponse({ success: false, error: 'Pipeline Dashboard tab not found' });
+
+  var dataRange = sheet.getDataRange();
+  var values = dataRange.getValues();
+
+  // Find header row
+  var headerRow = -1;
+  for (var r = 0; r < Math.min(values.length, 10); r++) {
+    for (var c = 0; c < values[r].length; c++) {
+      if (String(values[r][c]).trim() === 'Facility Name') {
+        headerRow = r;
+        break;
+      }
+    }
+    if (headerRow >= 0) break;
+  }
+  if (headerRow < 0) return jsonResponse({ success: false, error: 'Could not find header row' });
+
+  // Build column map
+  var colMap = {};
+  for (var c = 0; c < values[headerRow].length; c++) {
+    colMap[String(values[headerRow][c]).trim()] = c;
+  }
+
+  // Build new row
+  var newRow = [];
+  for (var c = 0; c < values[headerRow].length; c++) {
+    newRow.push('');
+  }
+
+  // Map deal data to columns
+  var mapping = {
+    'Facility Name': dealData.name || '',
+    'Status': dealData.status || 'New Lead',
+    'Priority': dealData.priority || '2 - Medium',
+    'Type': dealData.type || '',
+    'State(s)': dealData.states || '',
+    'Key Contact': dealData.keyContact || '',
+    'Notes': dealData.notes || '',
+    'EBITDA / Financials': dealData.ebitda || '',
+    'Asking Price': dealData.askingPrice || '',
+    'NDA Status': dealData.ndaStatus || 'N/A',
+    'Data Room': dealData.dataRoom || '',
+    'Site Visit': dealData.siteVisit || '',
+    'Next Action': dealData.nextAction || '',
+    'Action Owner': dealData.actionOwner || '',
+    'Deadline': dealData.deadline || '',
+    'Last Update': dealData.lastUpdate || '',
+    'Days Since Update': dealData.daysSinceUpdate || '0',
+    '#': dealData.dealNumber || ''
+  };
+
+  for (var header in mapping) {
+    if (colMap[header] !== undefined) {
+      newRow[colMap[header]] = mapping[header];
+    }
+  }
+
+  // Append the row
+  sheet.appendRow(newRow);
+
+  return jsonResponse({ success: true, action: 'newDeal', deal: dealData.name });
 }
 
 // Test function — run this from Apps Script to verify the sheet is accessible
