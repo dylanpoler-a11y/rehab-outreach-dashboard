@@ -4268,6 +4268,17 @@ async function submitAddDeal() {
 
   // Add locally immediately
   DATA.pipeline.push(dealData);
+
+  // Update the matching company object so map/filters reflect pipeline status
+  const compObj = DATA.companies.find(c => c.name === company.name);
+  if (compObj) {
+    compObj.inPipeline = true;
+    compObj.pipelineStatus = status;
+  }
+
+  // Re-render everything (pipeline board + map + filters)
+  buildFilters();
+  applyFilters();
   renderPipeline();
   closeAddDealModal();
   showToast(`Adding "${company.name}" to pipeline...`, 'pending');
