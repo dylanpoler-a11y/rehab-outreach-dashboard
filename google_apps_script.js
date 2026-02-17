@@ -37,6 +37,14 @@ var ACTION_FIELD_TO_HEADER = {
 // Name of the Action Items tab in Google Sheets
 var ACTION_ITEMS_TAB = 'Action Items';
 
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({
+    status: 'ok',
+    message: 'Rehab Outreach Pipeline API is running',
+    routes: ['updateStatus (POST)', 'updateField (POST)', 'updateAction (POST)', 'newDeal (POST)']
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
 function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
