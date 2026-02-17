@@ -75,6 +75,14 @@ function doPost(e) {
     }
 
     // ============================================================
+    // SLIDES: Create Google Slides executive summary
+    // Payload: { createSlides: { stateName, summary, pipeline, weeklyData, ... } }
+    // ============================================================
+    if (data.createSlides) {
+      return handleCreateSlides(data.createSlides);
+    }
+
+    // ============================================================
     // PIPELINE: Create new deal
     // Payload: { newDeal: { name, status, priority, type, states, ... } }
     // ============================================================
@@ -472,4 +480,369 @@ function populateAirtableIds() {
   }
 
   Logger.log('Done! Filled ' + filled + ' Airtable IDs out of ' + (values.length - headerRow - 1) + ' rows');
+}
+
+// ============================================================
+// SLIDES: Create Google Slides executive summary for a state
+// ============================================================
+
+function handleCreateSlides(data) {
+  try {
+    var pres = SlidesApp.create('State Outreach Report \u2014 ' + data.stateName + ' (' + data.generatedDate + ')');
+
+    // Slide 1: Title
+    buildTitleSlide(pres, data);
+
+    // Slide 2: Executive overview
+    buildOverviewSlide(pres, data);
+
+    // Slide 3: Pipeline details (only if deals exist)
+    if (data.pipeline && data.pipeline.totalDeals > 0) {
+      buildPipelineSlide(pres, data);
+    }
+
+    // Slide 4: Weekly outreach chart
+    if (data.weeklyData && data.weeklyData.length > 0) {
+      buildWeeklyChartSlide(pres, data);
+    }
+
+    pres.saveAndClose();
+
+    return jsonResponse({
+      success: true,
+      url: pres.getUrl(),
+      slideCount: pres.getSlides().length
+    });
+  } catch (err) {
+    return jsonResponse({ success: false, error: 'Slides creation failed: ' + err.toString() });
+  }
+}
+
+// --- Slide helpers ---
+
+function addSlideTitle(slide, text) {
+  var box = slide.insertTextBox(text, 40, 20, 640, 36);
+  box.getText().getTextStyle()
+    .setFontFamily('Inter')
+    .setFontSize(22)
+    .setBold(true)
+    .setForegroundColor('#f1f5f9');
+}
+
+function addSlideSubheading(slide, text, x, y) {
+  var box = slide.insertTextBox(text, x, y, 300, 20);
+  box.getText().getTextStyle()
+    .setFontFamily('Inter')
+    .setFontSize(12)
+    .setBold(true)
+    .setForegroundColor('#cbd5e1');
+}
+
+// --- Slide 1: Title ---
+
+function buildTitleSlide(pres, data) {
+  var slide = pres.getSlides()[0];
+  slide.getBackground().setSolidFill('#0f172a');
+
+  // Clear default placeholders
+  var elements = slide.getPageElements();
+  for (var i = elements.length - 1; i >= 0; i--) {
+    elements[i].remove();
+  }
+
+  // Title
+  var title = slide.insertTextBox('State Outreach Report', 50, 100, 620, 60);
+  title.getText().getTextStyle()
+    .setFontFamily('Inter')
+    .setFontSize(36)
+    .setBold(true)
+    .setForegroundColor('#f1f5f9');
+
+  // State name
+  var stateBox = slide.insertTextBox(data.stateName, 50, 170, 620, 70);
+  stateBox.getText().getTextStyle()
+    .setFontFamily('Inter')
+    .setFontSize(48)
+    .setBold(true)
+    .setForegroundColor('#3b82f6');
+
+  // Date + summary
+  var s = data.summary || {};
+  var subtitle = data.generatedDate + '  \u2022  ' + (s.total || 0) + ' Companies Tracked  \u2022  ' + (s.totalMsgs || 0) + ' Messages Sent';
+  var dateBox = slide.insertTextBox(subtitle, 50, 260, 620, 30);
+  dateBox.getText().getTextStyle()
+    .setFontFamily('Inter')
+    .setFontSize(14)
+    .setForegroundColor('#94a3b8');
+
+  // Accent line
+  var line = slide.insertShape(SlidesApp.ShapeType.RECTANGLE, 50, 310, 200, 4);
+  line.getFill().setSolidFill('#3b82f6');
+  line.getBorder().setTransparent();
+
+  // Branding
+  var brand = slide.insertTextBox('Behavioral Health Outreach Hub', 50, 350, 400, 20);
+  brand.getText().getTextStyle()
+    .setFontFamily('Inter')
+    .setFontSize(10)
+    .setForegroundColor('#475569');
+}
+
+// --- Slide 2: Executive Overview ---
+
+function buildOverviewSlide(pres, data) {
+  var slide = pres.appendSlide(SlidesApp.PredefinedLayout.BLANK);
+  slide.getBackground().setSolidFill('#0f172a');
+
+  addSlideTitle(slide, 'Executive Overview');
+
+  var s = data.summary || {};
+
+  // --- TOP ROW: 4 metric cards ---
+  var metrics = [
+    { label: 'Total Companies', value: String(s.total || 0), color: '#3b82f6' },
+    { label: "Mom 'n Pops", value: String(s.momNPop || 0), color: '#10b981' },
+    { label: 'Contacted', value: String(s.contacted || 0), color: '#f59e0b' },
+    { label: 'Messages Sent', value: String(s.totalMsgs || 0), color: '#06b6d4' }
+  ];
+
+  var cardW = 145, cardGap = 15, startX = 40, cardY = 66;
+  for (var i = 0; i < metrics.length; i++) {
+    var m = metrics[i];
+    var x = startX + i * (cardW + cardGap);
+    var card = slide.insertShape(SlidesApp.ShapeType.ROUND_RECTANGLE, x, cardY, cardW, 72);
+    card.getFill().setSolidFill('#1e293b');
+    card.getBorder().getLineFill().setSolidFill('#334155');
+    card.getBorder().setWeight(1);
+
+    var valBox = slide.insertTextBox(m.value, x + 10, cardY + 8, cardW - 20, 36);
+    valBox.getText().getTextStyle().setFontFamily('Inter').setFontSize(26).setBold(true).setForegroundColor(m.color);
+
+    var lblBox = slide.insertTextBox(m.label, x + 10, cardY + 44, cardW - 20, 18);
+    lblBox.getText().getTextStyle().setFontFamily('Inter').setFontSize(9).setForegroundColor('#94a3b8');
+  }
+
+  // --- MIDDLE: Outreach funnel ---
+  var funnelY = 155;
+  addSlideSubheading(slide, 'Outreach Funnel', 40, funnelY);
+
+  var funnelSteps = [
+    { label: 'Not Responded', value: String(s.notResponded || 0), color: '#64748b' },
+    { label: 'Responded', value: String(s.responded || 0), color: '#3b82f6' },
+    { label: 'Meetings', value: String(s.assistedMeeting || 0), color: '#10b981' },
+    { label: 'In Pipeline', value: String(s.inPipeline || 0), color: '#ec4899' }
+  ];
+
+  var funnelItemY = funnelY + 24;
+  var fw = 140;
+  for (var i = 0; i < funnelSteps.length; i++) {
+    var step = funnelSteps[i];
+    var fx = 40 + i * (fw + 18);
+    var rect = slide.insertShape(SlidesApp.ShapeType.ROUND_RECTANGLE, fx, funnelItemY, fw, 52);
+    rect.getFill().setSolidFill('#1e293b');
+    rect.getBorder().getLineFill().setSolidFill(step.color);
+    rect.getBorder().setWeight(2);
+
+    var vb = slide.insertTextBox(step.value, fx + 10, funnelItemY + 4, fw - 20, 26);
+    vb.getText().getTextStyle().setFontFamily('Inter').setFontSize(20).setBold(true).setForegroundColor(step.color);
+
+    var lb = slide.insertTextBox(step.label, fx + 10, funnelItemY + 30, fw - 20, 16);
+    lb.getText().getTextStyle().setFontFamily('Inter').setFontSize(8).setForegroundColor('#94a3b8');
+
+    // Arrow between steps
+    if (i < funnelSteps.length - 1) {
+      var arrowBox = slide.insertTextBox('\u2192', fx + fw + 2, funnelItemY + 14, 14, 20);
+      arrowBox.getText().getTextStyle().setFontFamily('Inter').setFontSize(16).setForegroundColor('#475569');
+    }
+  }
+
+  // --- NDA / LOI / EBITDA summary ---
+  var p = data.pipeline || {};
+  var ndaY = 248;
+  addSlideSubheading(slide, 'Pipeline & Deal Progress', 40, ndaY);
+
+  var ndaText = 'Pipeline Deals: ' + (p.totalDeals || 0) +
+    '  |  NDAs Signed: ' + (p.ndaSigned || 0) +
+    '  |  NDAs Sent: ' + (p.ndaSent || 0) +
+    '  |  LOIs: ' + (p.loiCount || 0);
+  var ndaBox = slide.insertTextBox(ndaText, 40, ndaY + 20, 640, 18);
+  ndaBox.getText().getTextStyle().setFontFamily('Inter').setFontSize(11).setForegroundColor('#cbd5e1');
+
+  // LOI details
+  if (p.loiDeals && p.loiDeals.length > 0) {
+    var loiLines = p.loiDeals.map(function(d) { return d.name + (d.askingPrice ? ' (' + d.askingPrice + ')' : ''); }).join('  |  ');
+    var loiBox = slide.insertTextBox('LOI Details: ' + loiLines, 40, ndaY + 40, 640, 16);
+    loiBox.getText().getTextStyle().setFontFamily('Inter').setFontSize(9).setForegroundColor('#94a3b8');
+  }
+
+  // EBITDA details
+  if (p.ebitdaDeals && p.ebitdaDeals.length > 0) {
+    var ey = (p.loiDeals && p.loiDeals.length > 0) ? ndaY + 58 : ndaY + 40;
+    var ebitdaLines = p.ebitdaDeals.map(function(d) { return d.name + ': ' + d.ebitda; }).join('  |  ');
+    var ebitdaBox = slide.insertTextBox('EBITDA: ' + ebitdaLines, 40, ey, 640, 16);
+    ebitdaBox.getText().getTextStyle().setFontFamily('Inter').setFontSize(9).setForegroundColor('#94a3b8');
+  }
+
+  // --- Ownership breakdown bar ---
+  var ownerY = 330;
+  addSlideSubheading(slide, 'Ownership Breakdown', 40, ownerY);
+
+  var ownerColors = {
+    "Mom 'n Pop": '#10b981', 'Private Equity': '#8b5cf6',
+    'Publicly Traded': '#3b82f6', 'Non-Profit': '#f59e0b',
+    'Bradford Facility': '#06b6d4', 'Bradford OP Office': '#14b8a6',
+    'CLOSED': '#ef4444', 'GOV': '#64748b'
+  };
+  var barX = 40, barTotalW = 640, barH = 22, barStartY = ownerY + 22;
+  var total = s.total || 1;
+  var oc = data.ownershipCounts || {};
+  var keys = Object.keys(oc);
+
+  for (var i = 0; i < keys.length; i++) {
+    var key = keys[i];
+    var count = oc[key];
+    var w = Math.max(Math.round((count / total) * barTotalW), 4);
+    var color = ownerColors[key] || '#64748b';
+
+    var seg = slide.insertShape(SlidesApp.ShapeType.RECTANGLE, barX, barStartY, w, barH);
+    seg.getFill().setSolidFill(color);
+    seg.getBorder().setTransparent();
+
+    // Label below for wider segments
+    if (w > 40) {
+      var segLabel = slide.insertTextBox(key + ' (' + count + ')', barX, barStartY + barH + 2, w, 14);
+      segLabel.getText().getTextStyle().setFontFamily('Inter').setFontSize(7).setForegroundColor('#94a3b8');
+      segLabel.getText().getParagraphStyle().setParagraphAlignment(SlidesApp.ParagraphAlignment.CENTER);
+    }
+
+    barX += w;
+  }
+}
+
+// --- Slide 3: Pipeline Detail Table ---
+
+function buildPipelineSlide(pres, data) {
+  var slide = pres.appendSlide(SlidesApp.PredefinedLayout.BLANK);
+  slide.getBackground().setSolidFill('#0f172a');
+
+  addSlideTitle(slide, 'Pipeline Details \u2014 ' + data.stateName);
+
+  var details = (data.pipeline && data.pipeline.details) || [];
+  var cols = ['Facility', 'Status', 'NDA', 'EBITDA', 'Asking Price', 'Priority'];
+  var colWidths = [160, 100, 70, 100, 90, 80];
+  var tableX = 30, tableY = 66;
+  var headerH = 30, rowH = 26;
+
+  // Header row
+  var hx = tableX;
+  for (var i = 0; i < cols.length; i++) {
+    var hdr = slide.insertShape(SlidesApp.ShapeType.RECTANGLE, hx, tableY, colWidths[i], headerH);
+    hdr.getFill().setSolidFill('#1e293b');
+    hdr.getBorder().getLineFill().setSolidFill('#334155');
+    hdr.getBorder().setWeight(1);
+
+    var ht = slide.insertTextBox(cols[i], hx + 6, tableY + 6, colWidths[i] - 12, headerH - 12);
+    ht.getText().getTextStyle().setFontFamily('Inter').setFontSize(9).setBold(true).setForegroundColor('#94a3b8');
+
+    hx += colWidths[i];
+  }
+
+  // Data rows
+  var maxRows = Math.min(details.length, 12);
+  for (var r = 0; r < maxRows; r++) {
+    var deal = details[r];
+    var rowValues = [
+      deal.name || '-',
+      deal.status || '-',
+      deal.ndaStatus || '-',
+      deal.ebitda || 'TBD',
+      deal.askingPrice || 'TBD',
+      deal.priority || '-'
+    ];
+    var cx = tableX;
+    var cy = tableY + headerH + (r * rowH);
+    var bgColor = r % 2 === 0 ? '#0f172a' : '#1a2332';
+
+    for (var c = 0; c < rowValues.length; c++) {
+      var cell = slide.insertShape(SlidesApp.ShapeType.RECTANGLE, cx, cy, colWidths[c], rowH);
+      cell.getFill().setSolidFill(bgColor);
+      cell.getBorder().getLineFill().setSolidFill('#1e293b');
+      cell.getBorder().setWeight(0.5);
+
+      var ct = slide.insertTextBox(String(rowValues[c]), cx + 6, cy + 4, colWidths[c] - 12, rowH - 8);
+      ct.getText().getTextStyle().setFontFamily('Inter').setFontSize(8).setForegroundColor('#e2e8f0');
+
+      cx += colWidths[c];
+    }
+  }
+
+  // Overflow note
+  if (details.length > maxRows) {
+    var noteY = tableY + headerH + (maxRows * rowH) + 8;
+    var note = slide.insertTextBox('+ ' + (details.length - maxRows) + ' additional deals not shown', tableX, noteY, 400, 16);
+    note.getText().getTextStyle().setFontFamily('Inter').setFontSize(9).setItalic(true).setForegroundColor('#64748b');
+  }
+}
+
+// --- Slide 4: Weekly Outreach Bar Chart ---
+
+function buildWeeklyChartSlide(pres, data) {
+  var slide = pres.appendSlide(SlidesApp.PredefinedLayout.BLANK);
+  slide.getBackground().setSolidFill('#0f172a');
+
+  addSlideTitle(slide, 'Weekly Outreach Activity \u2014 ' + data.stateName);
+
+  var weeks = data.weeklyData || [];
+  if (weeks.length === 0) return;
+
+  var chartX = 60, chartY = 80, chartW = 600, chartH = 260;
+  var barGap = 6;
+  var numBars = weeks.length;
+  var barW = Math.floor((chartW - (numBars - 1) * barGap) / numBars);
+  var maxCount = 1;
+  for (var i = 0; i < weeks.length; i++) {
+    if (weeks[i].count > maxCount) maxCount = weeks[i].count;
+  }
+
+  // Baseline
+  var baseY = chartY + chartH;
+  var baseline = slide.insertShape(SlidesApp.ShapeType.RECTANGLE, chartX - 2, baseY, chartW + 4, 2);
+  baseline.getFill().setSolidFill('#334155');
+  baseline.getBorder().setTransparent();
+
+  // Bars
+  for (var i = 0; i < weeks.length; i++) {
+    var w = weeks[i];
+    var barH = Math.max(Math.round((w.count / maxCount) * (chartH - 40)), 4);
+    var bx = chartX + i * (barW + barGap);
+    var by = baseY - barH;
+
+    // Bar
+    var bar = slide.insertShape(SlidesApp.ShapeType.ROUND_RECTANGLE, bx, by, barW, barH);
+    bar.getFill().setSolidFill('#3b82f6');
+    bar.getBorder().setTransparent();
+
+    // Count above bar
+    var countBox = slide.insertTextBox(String(w.count), bx, by - 16, barW, 14);
+    countBox.getText().getTextStyle().setFontFamily('Inter').setFontSize(8).setBold(true).setForegroundColor('#93c5fd');
+    countBox.getText().getParagraphStyle().setParagraphAlignment(SlidesApp.ParagraphAlignment.CENTER);
+
+    // Week label below
+    var labelBox = slide.insertTextBox(w.label || '', bx - 4, baseY + 4, barW + 8, 14);
+    labelBox.getText().getTextStyle().setFontFamily('Inter').setFontSize(7).setForegroundColor('#64748b');
+    labelBox.getText().getParagraphStyle().setParagraphAlignment(SlidesApp.ParagraphAlignment.CENTER);
+  }
+
+  // Y-axis label
+  var yLabel = slide.insertTextBox('Messages', 8, chartY + chartH / 2 - 10, 46, 18);
+  yLabel.getText().getTextStyle().setFontFamily('Inter').setFontSize(9).setForegroundColor('#64748b');
+
+  // Medium breakdown note at bottom
+  var mc = data.mediumCounts || {};
+  var medKeys = Object.keys(mc);
+  if (medKeys.length > 0) {
+    var medText = 'By Channel: ' + medKeys.map(function(k) { return k + ' (' + mc[k] + ')'; }).join('  \u2022  ');
+    var medBox = slide.insertTextBox(medText, 40, baseY + 24, 640, 16);
+    medBox.getText().getTextStyle().setFontFamily('Inter').setFontSize(8).setForegroundColor('#64748b');
+  }
 }

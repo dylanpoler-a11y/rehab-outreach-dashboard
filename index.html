@@ -1038,6 +1038,22 @@ body::before {
   font-size: 14px; padding: 2px 6px; border-radius: 4px; font-family: inherit;
 }
 .drilldown-close:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+.export-slides-btn {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 12px; border-radius: 6px;
+  background: rgba(59,130,246,0.12); border: 1px solid rgba(59,130,246,0.3);
+  color: #60a5fa; font-size: 11px; font-weight: 600;
+  cursor: pointer; font-family: inherit; transition: all 0.2s;
+  white-space: nowrap;
+}
+.export-slides-btn:hover { background: rgba(59,130,246,0.22); border-color: rgba(59,130,246,0.5); color: #93bbfc; transform: translateY(-1px); }
+.export-slides-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.export-slides-btn.loading { pointer-events: none; opacity: 0.7; }
+.export-slides-btn.loading::after {
+  content: ''; display: inline-block; width: 12px; height: 12px; border: 2px solid transparent;
+  border-top-color: #60a5fa; border-radius: 50%;
+  animation: spin 0.8s linear infinite; margin-left: 4px;
+}
 .drilldown-table { width: 100%; border-collapse: collapse; font-size: 11px; }
 .drilldown-table th {
   padding: 8px 12px; text-align: left; font-size: 9px; font-weight: 700;
@@ -4978,7 +4994,10 @@ function renderStateDrilldown(stateName, companies) {
     <div class="drilldown-panel">
       <div class="drilldown-header">
         <span class="drilldown-title">${stateName}<span class="drilldown-count">${companies.length} compan${companies.length !== 1 ? 'ies' : 'y'}</span></span>
-        <button class="drilldown-close" onclick="stateSelectedBar=null;document.getElementById('stateDrilldown').innerHTML='';document.querySelectorAll('#stateBarChart .bar-row').forEach(r=>r.classList.remove('active'));refreshCrossFilteredCharts('state');">✕</button>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button class="export-slides-btn" onclick="exportStateToSlides('${stateName.replace(/'/g, "\\'")}')">📊 Export to Slides</button>
+          <button class="drilldown-close" onclick="stateSelectedBar=null;document.getElementById('stateDrilldown').innerHTML='';document.querySelectorAll('#stateBarChart .bar-row').forEach(r=>r.classList.remove('active'));refreshCrossFilteredCharts('state');">✕</button>
+        </div>
       </div>
       <div class="drilldown-table-wrap">
         <table class="drilldown-table">
@@ -5004,6 +5023,187 @@ function renderStateDrilldown(stateName, companies) {
   </tr>`;
 
   wireDrilldownSort(tableEl, companies, columns, renderRow);
+}
+
+// ============================================================
+// EXPORT STATE TO GOOGLE SLIDES
+// ============================================================
+
+function aggregateStateData(stateName, companies) {
+  const total = companies.length;
+  const momNPop = companies.filter(c => c.ownership === "Mom 'n Pop").length;
+  const contacted = companies.filter(c => c.msgsSent > 0).length;
+  const notContacted = total - contacted;
+  const responded = companies.filter(c => c.responded).length;
+  const notResponded = contacted - responded;
+  const scheduledIntro = companies.filter(c => c.scheduledIntro).length;
+  const assistedMeeting = companies.filter(c => c.assistedMeeting).length;
+  const inPipeline = companies.filter(c => c.inPipeline).length;
+  const totalMsgs = companies.reduce((s, c) => s + (c.msgsSent || 0), 0);
+
+  // Ownership breakdown
+  const ownershipCounts = {};
+  companies.forEach(c => {
+    const o = c.ownership || 'Unknown';
+    ownershipCounts[o] = (ownershipCounts[o] || 0) + 1;
+  });
+
+  // Pipeline deals for this state
+  const stateAbbrev = STATE_ABBREV_JS[stateName] || stateName;
+  const stateDeals = (DATA.pipeline || []).filter(deal => {
+    const s = (deal.states || '').toUpperCase();
+    return s.includes(stateName.toUpperCase()) || s.includes(stateAbbrev.toUpperCase());
+  });
+
+  // NDA / LOI / EBITDA
+  const ndaSigned = stateDeals.filter(d => (d.ndaStatus || '').toLowerCase().includes('signed')).length;
+  const ndaSent = stateDeals.filter(d => (d.ndaStatus || '').toLowerCase().includes('sent')).length;
+  const loiDeals = stateDeals.filter(d => (d.ndaStatus || '').toLowerCase().includes('loi'));
+  const ebitdaDeals = stateDeals.filter(d => d.ebitda && d.ebitda !== 'TBD' && d.ebitda.trim());
+
+  const pipelineDetails = stateDeals.map(d => ({
+    name: d.name, status: d.status, ndaStatus: d.ndaStatus || '',
+    ebitda: d.ebitda || '', askingPrice: d.askingPrice || '',
+    priority: d.priority || '', keyContact: d.keyContact || '',
+    lastUpdate: d.lastUpdate || '', notes: d.notes || ''
+  }));
+
+  // Medium breakdown
+  const mediumCounts = {};
+  companies.forEach(c => {
+    if (c.byMedium) {
+      Object.entries(c.byMedium).forEach(([med, count]) => {
+        mediumCounts[med] = (mediumCounts[med] || 0) + count;
+      });
+    }
+  });
+
+  // Weekly outreach data
+  const weeklyData = buildWeeklyOutreachForState(companies);
+
+  return {
+    stateName,
+    generatedDate: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+    summary: {
+      total, momNPop, contacted, notContacted, responded, notResponded,
+      scheduledIntro, assistedMeeting, inPipeline, totalMsgs
+    },
+    ownershipCounts,
+    mediumCounts,
+    pipeline: {
+      totalDeals: stateDeals.length,
+      ndaSigned, ndaSent,
+      loiCount: loiDeals.length,
+      loiDeals: loiDeals.map(d => ({ name: d.name, askingPrice: d.askingPrice || '' })),
+      ebitdaDeals: ebitdaDeals.map(d => ({ name: d.name, ebitda: d.ebitda })),
+      details: pipelineDetails
+    },
+    weeklyData
+  };
+}
+
+function buildWeeklyOutreachForState(companies) {
+  const companyNames = new Set(companies.map(c => c.name));
+  let messages = [];
+
+  if (DATA.messages && DATA.messages.length > 0) {
+    messages = DATA.messages.filter(m => m.date && companyNames.has(m.company));
+  } else {
+    // Fallback: approximate from company dates + medium counts
+    companies.forEach(c => {
+      if (c.byMedium && (c.lastMsg || c.firstMsg)) {
+        const dateStr = c.lastMsg || c.firstMsg;
+        Object.entries(c.byMedium).forEach(([med, count]) => {
+          for (let i = 0; i < count; i++) {
+            messages.push({ date: dateStr, medium: med, company: c.name });
+          }
+        });
+      }
+    });
+  }
+
+  // Bucket into weeks
+  const weekBuckets = {};
+  messages.forEach(m => {
+    if (!m.date) return;
+    const d = parseDateStr(m.date);
+    if (isNaN(d.getTime())) return;
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const mon = new Date(d);
+    mon.setDate(diff);
+    const key = mon.toISOString().split('T')[0];
+    weekBuckets[key] = (weekBuckets[key] || 0) + 1;
+  });
+
+  const sorted = Object.entries(weekBuckets)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .slice(-12);
+
+  return sorted.map(([weekStart, count]) => ({
+    weekStart,
+    label: new Date(weekStart + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    count
+  }));
+}
+
+async function exportStateToSlides(stateName) {
+  if (!APPS_SCRIPT_URL) {
+    showToast('Apps Script URL not configured', 'error');
+    return;
+  }
+
+  const companies = window._stateCompanies && window._stateCompanies[stateName];
+  if (!companies || companies.length === 0) {
+    showToast('No company data for ' + stateName, 'error');
+    return;
+  }
+
+  const btn = document.querySelector('.export-slides-btn');
+  if (btn) {
+    btn.classList.add('loading');
+    btn.disabled = true;
+    btn.textContent = 'Creating Slides...';
+  }
+  showToast('Generating executive summary for ' + stateName + '...', 'pending');
+
+  try {
+    const payload = aggregateStateData(stateName, companies);
+
+    const resp = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ createSlides: payload })
+    });
+
+    const text = await resp.text();
+    let result;
+    try {
+      result = JSON.parse(text);
+    } catch (parseErr) {
+      if (resp.ok || resp.redirected) {
+        showToast('Slides may have been created — check Google Drive', 'pending');
+        return;
+      }
+      throw new Error('Invalid response from Apps Script');
+    }
+
+    if (result.success && result.url) {
+      showToast('Presentation created! Opening...', 'success');
+      window.open(result.url, '_blank');
+    } else {
+      showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+    }
+  } catch (err) {
+    showToast('Error creating slides: ' + err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.classList.remove('loading');
+      btn.disabled = false;
+      btn.textContent = '📊 Export to Slides';
+    }
+  }
 }
 
 function toggleStateFilter(state) {
