@@ -1455,6 +1455,22 @@ document.addEventListener('DOMContentLoaded', () => {
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
 <script>
 // ============================================================
+// UTILITIES
+// ============================================================
+function debounce(fn, ms) {
+  let timer;
+  return function(...args) { clearTimeout(timer); timer = setTimeout(() => fn.apply(this, args), ms); };
+}
+
+// Pre-computed date cache for parseDateStr results
+const _dateCache = new Map();
+function parseDateStrCached(dateStr) {
+  if (_dateCache.has(dateStr)) return _dateCache.get(dateStr);
+  const d = parseDateStr(dateStr);
+  _dateCache.set(dateStr, d);
+  return d;
+}
+
 // DATA & STATE
 // ============================================================
 let DATA = { companies: [], pipeline: [], actions: [], meta: {} };
@@ -2188,9 +2204,10 @@ function buildFilters() {
   }));
   renderFilterGroup('accountFilters', accounts, 'account', companies);
 
+  const debouncedApplyFilters = debounce(() => applyFilters(), 200);
   document.getElementById('searchInput').addEventListener('input', e => {
     activeFilters.search = e.target.value.toLowerCase();
-    applyFilters();
+    debouncedApplyFilters();
   });
 }
 
@@ -2298,10 +2315,11 @@ function clearSoloFilter() {
 
 function applyFilters() {
   filteredData = DATA.companies.filter(c => {
-    if (activeFilters.search && !c.name.toLowerCase().includes(activeFilters.search) &&
-        !(c.address || '').toLowerCase().includes(activeFilters.search) &&
-        !(c.fullState || '').toLowerCase().includes(activeFilters.search) &&
-        !(c.allStates || '').toLowerCase().includes(activeFilters.search)) return false;
+    // Use pre-computed lowercase search fields for speed
+    if (!c._searchLC) {
+      c._searchLC = [c.name, c.address || '', c.fullState || '', c.allStates || ''].map(s => s.toLowerCase());
+    }
+    if (activeFilters.search && !c._searchLC.some(s => s.includes(activeFilters.search))) return false;
 
     if (activeFilters.pipeline.size > 0) {
       let m = false;
@@ -4170,9 +4188,14 @@ function renderAddDealDropdown(query) {
   const q = query.trim().toLowerCase();
   if (!q) { dropdown.classList.remove('open'); dropdown.innerHTML = ''; return; }
 
-  const matches = DATA.companies.filter(c =>
-    c.name && c.name.toLowerCase().includes(q)
-  ).slice(0, 30);
+  // Use pre-computed lowercase names for fast filtering
+  if (!DATA._companyNamesLC) {
+    DATA._companyNamesLC = DATA.companies.map(c => (c.name || '').toLowerCase());
+  }
+  const matches = [];
+  for (let i = 0; i < DATA.companies.length && matches.length < 30; i++) {
+    if (DATA._companyNamesLC[i].includes(q)) matches.push(DATA.companies[i]);
+  }
 
   if (matches.length === 0) {
     dropdown.innerHTML = '<div class="add-deal-no-results">No matching companies</div>';
@@ -4311,9 +4334,10 @@ function initAddDealModal() {
   document.getElementById('addDealOverlay').addEventListener('click', closeAddDealModal);
   document.getElementById('addDealSave').addEventListener('click', submitAddDeal);
 
-  // Company search
+  // Company search (debounced for performance with 1000+ companies)
   const searchInput = document.getElementById('addDealSearch');
-  searchInput.addEventListener('input', function() { renderAddDealDropdown(this.value); });
+  const debouncedSearch = debounce(val => renderAddDealDropdown(val), 150);
+  searchInput.addEventListener('input', function() { debouncedSearch(this.value); });
   searchInput.addEventListener('focus', function() { if (this.value.trim()) renderAddDealDropdown(this.value); });
 
   // Dropdown click
@@ -4423,18 +4447,24 @@ function filterCompaniesByDateRange(companies, dateFrom, dateTo) {
   if (!dateFrom && !dateTo) return companies;
   const from = dateFrom ? new Date(dateFrom + 'T00:00:00') : null;
   const to = dateTo ? new Date(dateTo + 'T23:59:59') : null;
+  const fromTime = from ? from.getTime() : null;
+  const toTime = to ? to.getTime() : null;
   return companies.filter(c => {
-    // A company matches if its outreach period overlaps with the date range
-    const first = c.firstMsg ? parseDateStr(c.firstMsg) : null;
-    const last = c.lastMsg ? parseDateStr(c.lastMsg) : null;
-    const validFirst = first && !isNaN(first.getTime()) ? first : null;
-    const validLast = last && !isNaN(last.getTime()) ? last : null;
-    if (!validFirst && !validLast) return false;
-    // Data has firstMsg/lastMsg swapped for many records — use min/max to be safe
-    const earliest = validFirst && validLast ? new Date(Math.min(validFirst, validLast)) : (validFirst || validLast);
-    const latest = validFirst && validLast ? new Date(Math.max(validFirst, validLast)) : (validFirst || validLast);
-    if (to && earliest > to) return false;    // company started after range ends
-    if (from && latest < from) return false;   // company ended before range starts
+    // Use pre-computed date bounds if available, otherwise parse and cache
+    if (c._dateMin === undefined) {
+      const first = c.firstMsg ? parseDateStrCached(c.firstMsg) : null;
+      const last = c.lastMsg ? parseDateStrCached(c.lastMsg) : null;
+      const vf = first && !isNaN(first.getTime()) ? first.getTime() : null;
+      const vl = last && !isNaN(last.getTime()) ? last.getTime() : null;
+      if (!vf && !vl) { c._dateMin = null; c._dateMax = null; }
+      else {
+        c._dateMin = vf && vl ? Math.min(vf, vl) : (vf || vl);
+        c._dateMax = vf && vl ? Math.max(vf, vl) : (vf || vl);
+      }
+    }
+    if (c._dateMin === null) return false;
+    if (toTime && c._dateMin > toTime) return false;
+    if (fromTime && c._dateMax < fromTime) return false;
     return true;
   });
 }
