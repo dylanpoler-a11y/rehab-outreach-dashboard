@@ -496,14 +496,14 @@ function handleCreateSlides(data) {
     // Slide 2: Executive overview
     buildOverviewSlide(pres, data);
 
-    // Slide 3: Pipeline details (only if deals exist)
-    if (data.pipeline && data.pipeline.totalDeals > 0) {
-      buildPipelineSlide(pres, data);
-    }
-
-    // Slide 4: Weekly outreach chart
+    // Slide 3: Weekly outreach chart (with scheduled call grouping)
     if (data.weeklyData && data.weeklyData.length > 0) {
       buildWeeklyChartSlide(pres, data);
+    }
+
+    // Slide 4: Pipeline details (only if deals exist)
+    if (data.pipeline && data.pipeline.totalDeals > 0) {
+      buildPipelineSlide(pres, data);
     }
 
     pres.saveAndClose();
@@ -622,15 +622,22 @@ function buildOverviewSlide(pres, data) {
     lblBox.getText().getTextStyle().setFontFamily('Inter').setFontSize(9).setForegroundColor('#94a3b8');
   }
 
-  // --- MIDDLE: Outreach funnel ---
+  // --- MIDDLE: Outreach funnel (Mom 'n Pop only) ---
   var funnelY = 155;
-  addSlideSubheading(slide, 'Outreach Funnel', 40, funnelY);
+  addSlideSubheading(slide, "Outreach Funnel — Mom 'n Pop (" + (s.momNPop || 0) + ' companies)', 40, funnelY);
+
+  var mnpContacted = s.mnpContacted || 0;
+  var mnpResponded = s.mnpResponded || 0;
+  var mnpNotResponded = s.mnpNotResponded || 0;
+  var mnpMeetings = s.mnpAssistedMeeting || 0;
+  var mnpPipeline = s.mnpInPipeline || 0;
+  var mnpBase = s.momNPop || 1;
 
   var funnelSteps = [
-    { label: 'Not Responded', value: String(s.notResponded || 0), color: '#64748b' },
-    { label: 'Responded', value: String(s.responded || 0), color: '#3b82f6' },
-    { label: 'Meetings', value: String(s.assistedMeeting || 0), color: '#10b981' },
-    { label: 'In Pipeline', value: String(s.inPipeline || 0), color: '#ec4899' }
+    { label: 'Not Responded', value: String(mnpNotResponded), pct: ((mnpNotResponded / mnpBase) * 100).toFixed(1) + '%', color: '#64748b' },
+    { label: 'Responded', value: String(mnpResponded), pct: ((mnpResponded / mnpBase) * 100).toFixed(1) + '%', color: '#3b82f6' },
+    { label: 'Meetings', value: String(mnpMeetings), pct: ((mnpMeetings / mnpBase) * 100).toFixed(1) + '%', color: '#10b981' },
+    { label: 'In Pipeline', value: String(mnpPipeline), pct: ((mnpPipeline / mnpBase) * 100).toFixed(1) + '%', color: '#ec4899' }
   ];
 
   var funnelItemY = funnelY + 24;
@@ -638,27 +645,30 @@ function buildOverviewSlide(pres, data) {
   for (var i = 0; i < funnelSteps.length; i++) {
     var step = funnelSteps[i];
     var fx = 40 + i * (fw + 18);
-    var rect = slide.insertShape(SlidesApp.ShapeType.ROUND_RECTANGLE, fx, funnelItemY, fw, 52);
+    var rect = slide.insertShape(SlidesApp.ShapeType.ROUND_RECTANGLE, fx, funnelItemY, fw, 60);
     rect.getFill().setSolidFill('#1e293b');
     rect.getBorder().getLineFill().setSolidFill(step.color);
     rect.getBorder().setWeight(2);
 
-    var vb = slide.insertTextBox(step.value, fx + 10, funnelItemY + 4, fw - 20, 26);
-    vb.getText().getTextStyle().setFontFamily('Inter').setFontSize(20).setBold(true).setForegroundColor(step.color);
+    var vb = slide.insertTextBox(step.value, fx + 10, funnelItemY + 2, fw - 20, 22);
+    vb.getText().getTextStyle().setFontFamily('Inter').setFontSize(18).setBold(true).setForegroundColor(step.color);
 
-    var lb = slide.insertTextBox(step.label, fx + 10, funnelItemY + 30, fw - 20, 16);
+    var pctBox = slide.insertTextBox(step.pct, fx + 10, funnelItemY + 24, fw - 20, 14);
+    pctBox.getText().getTextStyle().setFontFamily('Inter').setFontSize(10).setForegroundColor(step.color);
+
+    var lb = slide.insertTextBox(step.label, fx + 10, funnelItemY + 40, fw - 20, 14);
     lb.getText().getTextStyle().setFontFamily('Inter').setFontSize(8).setForegroundColor('#94a3b8');
 
     // Arrow between steps
     if (i < funnelSteps.length - 1) {
-      var arrowBox = slide.insertTextBox('\u2192', fx + fw + 2, funnelItemY + 14, 14, 20);
+      var arrowBox = slide.insertTextBox('\u2192', fx + fw + 2, funnelItemY + 16, 14, 20);
       arrowBox.getText().getTextStyle().setFontFamily('Inter').setFontSize(16).setForegroundColor('#475569');
     }
   }
 
   // --- NDA / LOI / EBITDA summary ---
   var p = data.pipeline || {};
-  var ndaY = 248;
+  var ndaY = 258;
   addSlideSubheading(slide, 'Pipeline & Deal Progress', 40, ndaY);
 
   var ndaText = 'Pipeline Deals: ' + (p.totalDeals || 0) +
@@ -719,7 +729,7 @@ function buildOverviewSlide(pres, data) {
   }
 }
 
-// --- Slide 3: Pipeline Detail Table ---
+// --- Slide 4: Pipeline Detail Table ---
 
 function buildPipelineSlide(pres, data) {
   var slide = pres.appendSlide(SlidesApp.PredefinedLayout.BLANK);
@@ -784,7 +794,7 @@ function buildPipelineSlide(pres, data) {
   }
 }
 
-// --- Slide 4: Weekly Outreach Bar Chart ---
+// --- Slide 3: Weekly Outreach Bar Chart (with Scheduled Call grouping) ---
 
 function buildWeeklyChartSlide(pres, data) {
   var slide = pres.appendSlide(SlidesApp.PredefinedLayout.BLANK);
@@ -795,7 +805,7 @@ function buildWeeklyChartSlide(pres, data) {
   var weeks = data.weeklyData || [];
   if (weeks.length === 0) return;
 
-  var chartX = 60, chartY = 80, chartW = 600, chartH = 260;
+  var chartX = 60, chartY = 80, chartW = 600, chartH = 240;
   var barGap = 6;
   var numBars = weeks.length;
   var barW = Math.floor((chartW - (numBars - 1) * barGap) / numBars);
@@ -810,21 +820,42 @@ function buildWeeklyChartSlide(pres, data) {
   baseline.getFill().setSolidFill('#334155');
   baseline.getBorder().setTransparent();
 
-  // Bars
+  // Stacked bars: bottom = Scheduled Call (green), top = No Scheduled Call (blue)
   for (var i = 0; i < weeks.length; i++) {
     var w = weeks[i];
-    var barH = Math.max(Math.round((w.count / maxCount) * (chartH - 40)), 4);
+    var totalH = Math.max(Math.round((w.count / maxCount) * (chartH - 40)), 4);
     var bx = chartX + i * (barW + barGap);
-    var by = baseY - barH;
 
-    // Bar
-    var bar = slide.insertShape(SlidesApp.ShapeType.ROUND_RECTANGLE, bx, by, barW, barH);
-    bar.getFill().setSolidFill('#3b82f6');
-    bar.getBorder().setTransparent();
+    var scheduledCount = w.scheduled || 0;
+    var notScheduledCount = w.notScheduled || 0;
 
-    // Count above bar
-    var countBox = slide.insertTextBox(String(w.count), bx, by - 16, barW, 14);
-    countBox.getText().getTextStyle().setFontFamily('Inter').setFontSize(8).setBold(true).setForegroundColor('#93c5fd');
+    // Calculate segment heights proportionally
+    var scheduledH = w.count > 0 ? Math.round((scheduledCount / w.count) * totalH) : 0;
+    var notScheduledH = totalH - scheduledH;
+
+    // Draw not-scheduled (blue) segment on top
+    if (notScheduledH > 0) {
+      var topY = baseY - totalH;
+      var topBar = slide.insertShape(SlidesApp.ShapeType.RECTANGLE, bx, topY, barW, notScheduledH);
+      topBar.getFill().setSolidFill('#3b82f6');
+      topBar.getBorder().setTransparent();
+    }
+
+    // Draw scheduled (green) segment on bottom
+    if (scheduledH > 0) {
+      var botY = baseY - scheduledH;
+      var botBar = slide.insertShape(SlidesApp.ShapeType.RECTANGLE, bx, botY, barW, scheduledH);
+      botBar.getFill().setSolidFill('#10b981');
+      botBar.getBorder().setTransparent();
+    }
+
+    // Count label above bar showing breakdown
+    var countLabel = String(w.count);
+    if (scheduledCount > 0) {
+      countLabel = scheduledCount + '/' + w.count;
+    }
+    var countBox = slide.insertTextBox(countLabel, bx - 2, baseY - totalH - 16, barW + 4, 14);
+    countBox.getText().getTextStyle().setFontFamily('Inter').setFontSize(7).setBold(true).setForegroundColor('#93c5fd');
     countBox.getText().getParagraphStyle().setParagraphAlignment(SlidesApp.ParagraphAlignment.CENTER);
 
     // Week label below
@@ -837,12 +868,26 @@ function buildWeeklyChartSlide(pres, data) {
   var yLabel = slide.insertTextBox('Messages', 8, chartY + chartH / 2 - 10, 46, 18);
   yLabel.getText().getTextStyle().setFontFamily('Inter').setFontSize(9).setForegroundColor('#64748b');
 
+  // Legend
+  var legendY = baseY + 22;
+  var legendGreen = slide.insertShape(SlidesApp.ShapeType.RECTANGLE, 60, legendY, 12, 12);
+  legendGreen.getFill().setSolidFill('#10b981');
+  legendGreen.getBorder().setTransparent();
+  var legendGreenLabel = slide.insertTextBox('Scheduled Call', 76, legendY - 1, 100, 14);
+  legendGreenLabel.getText().getTextStyle().setFontFamily('Inter').setFontSize(8).setForegroundColor('#94a3b8');
+
+  var legendBlue = slide.insertShape(SlidesApp.ShapeType.RECTANGLE, 180, legendY, 12, 12);
+  legendBlue.getFill().setSolidFill('#3b82f6');
+  legendBlue.getBorder().setTransparent();
+  var legendBlueLabel = slide.insertTextBox('No Scheduled Call', 196, legendY - 1, 120, 14);
+  legendBlueLabel.getText().getTextStyle().setFontFamily('Inter').setFontSize(8).setForegroundColor('#94a3b8');
+
   // Medium breakdown note at bottom
   var mc = data.mediumCounts || {};
   var medKeys = Object.keys(mc);
   if (medKeys.length > 0) {
     var medText = 'By Channel: ' + medKeys.map(function(k) { return k + ' (' + mc[k] + ')'; }).join('  \u2022  ');
-    var medBox = slide.insertTextBox(medText, 40, baseY + 24, 640, 16);
+    var medBox = slide.insertTextBox(medText, 40, legendY + 18, 640, 16);
     medBox.getText().getTextStyle().setFontFamily('Inter').setFontSize(8).setForegroundColor('#64748b');
   }
 }

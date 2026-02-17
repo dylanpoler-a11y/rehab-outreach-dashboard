@@ -5041,6 +5041,15 @@ function aggregateStateData(stateName, companies) {
   const inPipeline = companies.filter(c => c.inPipeline).length;
   const totalMsgs = companies.reduce((s, c) => s + (c.msgsSent || 0), 0);
 
+  // Mom 'n Pop funnel stats (for outreach funnel slide)
+  const mnpCompanies = companies.filter(c => c.ownership === "Mom 'n Pop");
+  const mnpContacted = mnpCompanies.filter(c => c.msgsSent > 0).length;
+  const mnpResponded = mnpCompanies.filter(c => c.responded).length;
+  const mnpNotResponded = mnpContacted - mnpResponded;
+  const mnpScheduledIntro = mnpCompanies.filter(c => c.scheduledIntro).length;
+  const mnpAssistedMeeting = mnpCompanies.filter(c => c.assistedMeeting).length;
+  const mnpInPipeline = mnpCompanies.filter(c => c.inPipeline).length;
+
   // Ownership breakdown
   const ownershipCounts = {};
   companies.forEach(c => {
@@ -5086,7 +5095,9 @@ function aggregateStateData(stateName, companies) {
     generatedDate: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
     summary: {
       total, momNPop, contacted, notContacted, responded, notResponded,
-      scheduledIntro, assistedMeeting, inPipeline, totalMsgs
+      scheduledIntro, assistedMeeting, inPipeline, totalMsgs,
+      mnpContacted, mnpResponded, mnpNotResponded,
+      mnpScheduledIntro, mnpAssistedMeeting, mnpInPipeline
     },
     ownershipCounts,
     mediumCounts,
@@ -5104,6 +5115,8 @@ function aggregateStateData(stateName, companies) {
 
 function buildWeeklyOutreachForState(companies) {
   const companyNames = new Set(companies.map(c => c.name));
+  // Build a lookup: company name → scheduledIntro boolean
+  const scheduledMap = new Map(companies.map(c => [c.name, !!c.scheduledIntro]));
   let messages = [];
 
   if (DATA.messages && DATA.messages.length > 0) {
@@ -5122,7 +5135,7 @@ function buildWeeklyOutreachForState(companies) {
     });
   }
 
-  // Bucket into weeks
+  // Bucket into weeks with scheduled call tracking
   const weekBuckets = {};
   messages.forEach(m => {
     if (!m.date) return;
@@ -5133,17 +5146,25 @@ function buildWeeklyOutreachForState(companies) {
     const mon = new Date(d);
     mon.setDate(diff);
     const key = mon.toISOString().split('T')[0];
-    weekBuckets[key] = (weekBuckets[key] || 0) + 1;
+    if (!weekBuckets[key]) weekBuckets[key] = { count: 0, scheduled: 0, notScheduled: 0 };
+    weekBuckets[key].count++;
+    if (scheduledMap.get(m.company)) {
+      weekBuckets[key].scheduled++;
+    } else {
+      weekBuckets[key].notScheduled++;
+    }
   });
 
   const sorted = Object.entries(weekBuckets)
     .sort((a, b) => a[0].localeCompare(b[0]))
     .slice(-12);
 
-  return sorted.map(([weekStart, count]) => ({
+  return sorted.map(([weekStart, bucket]) => ({
     weekStart,
     label: new Date(weekStart + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    count
+    count: bucket.count,
+    scheduled: bucket.scheduled,
+    notScheduled: bucket.notScheduled
   }));
 }
 
