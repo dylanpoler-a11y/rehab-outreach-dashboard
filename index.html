@@ -1304,7 +1304,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <select class="action-toolbar-select" id="actionGroupBy"><option value="">None</option><option value="priority">Priority</option><option value="status">Status</option><option value="owner">Owner</option><option value="facility">Facility</option></select>
             </div>
             <div class="action-toolbar-sep"></div>
-            <div class="action-show-done" id="actionShowDone" title="Show completed items">
+            <div class="action-show-done" id="actionShowDone" title="Show completed items" onclick="toggleShowDone()">
               <span class="action-show-done-check">&#10003;</span> Show Done
             </div>
             <div class="action-toolbar-sep"></div>
@@ -2578,6 +2578,14 @@ let actionDoneSet = new Set(); // indices of completed actions
 const actionPrevStatusMap = new Map(); // idx -> previous status before marking done
 let actionShowDone = false;
 
+/** Toggle Show Done button */
+function toggleShowDone() {
+  actionShowDone = !actionShowDone;
+  const btn = document.getElementById('actionShowDone');
+  if (btn) btn.classList.toggle('active', actionShowDone);
+  renderActionItems();
+}
+
 /** Check if an action item is done — either locally marked or status=Done from sheet */
 function isActionDone(actionOrIdx) {
   if (typeof actionOrIdx === 'number') {
@@ -2746,15 +2754,7 @@ function initActionItems() {
     if (el) el.addEventListener('change', renderActionItems);
   });
 
-  // Show done toggle
-  const showDoneBtn = document.getElementById('actionShowDone');
-  if (showDoneBtn) {
-    showDoneBtn.addEventListener('click', () => {
-      actionShowDone = !actionShowDone;
-      showDoneBtn.classList.toggle('active', actionShowDone);
-      renderActionItems();
-    });
-  }
+  // Show done toggle — wired via onclick in HTML (toggleShowDone function)
 
   // New action item button
   const newBtn = document.getElementById('actionNewBtn');
