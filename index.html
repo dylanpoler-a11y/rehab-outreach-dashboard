@@ -1556,6 +1556,10 @@ async function init() {
   renderPipeline();
   initDealEditPopover();
   initAddDealModal();
+
+  // Immediately fetch live pipeline + actions from Google Sheets
+  // so recently added deals show up without waiting for auto-refresh
+  refreshData(true);
 }
 
 async function refreshData(silent = false) {
@@ -1577,6 +1581,15 @@ async function refreshData(silent = false) {
     // Merge: preserve company/map data from data.json, update pipeline + actions
     DATA.pipeline = newPipeline;
     DATA.actions = newActions;
+
+    // Sync pipeline status to company objects so map/filters reflect live data
+    const pipeMap = new Map(newPipeline.map(p => [p.name, p.status]));
+    DATA.companies.forEach(c => {
+      if (pipeMap.has(c.name)) {
+        c.inPipeline = true;
+        c.pipelineStatus = pipeMap.get(c.name);
+      }
+    });
 
     // Re-apply done statuses from localStorage
     actionDoneSet.forEach(idx => {
