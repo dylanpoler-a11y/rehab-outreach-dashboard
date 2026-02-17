@@ -336,7 +336,8 @@ function handleNewDeal(ss, dealData) {
     'Deadline': dealData.deadline || '',
     'Last Update': dealData.lastUpdate || '',
     'Days Since Update': dealData.daysSinceUpdate || '0',
-    '#': dealData.dealNumber || ''
+    '#': dealData.dealNumber || '',
+    'Airtable ID': dealData.airtableId || ''
   };
 
   for (var header in mapping) {
