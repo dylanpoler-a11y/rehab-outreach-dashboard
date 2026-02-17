@@ -2578,6 +2578,17 @@ let actionDoneSet = new Set(); // indices of completed actions
 const actionPrevStatusMap = new Map(); // idx -> previous status before marking done
 let actionShowDone = false;
 
+/** Check if an action item is done — either locally marked or status=Done from sheet */
+function isActionDone(actionOrIdx) {
+  if (typeof actionOrIdx === 'number') {
+    if (actionDoneSet.has(actionOrIdx)) return true;
+    const a = DATA.actions[actionOrIdx];
+    return a && a.status && a.status.toLowerCase() === 'done';
+  }
+  if (actionDoneSet.has(actionOrIdx._idx)) return true;
+  return actionOrIdx.status && actionOrIdx.status.toLowerCase() === 'done';
+}
+
 // Convert various date text formats to YYYY-MM-DD for <input type="date">
 function toDateInputValue(text) {
   if (!text) return '';
@@ -2616,8 +2627,8 @@ function getAllActionsForDeal(dealName) {
     .map((a, i) => ({ ...a, _idx: i }))
     .filter(a => matchesDeal(dealName, a.facility))
     .sort((a, b) => {
-      const doneA = actionDoneSet.has(a._idx) ? 1 : 0;
-      const doneB = actionDoneSet.has(b._idx) ? 1 : 0;
+      const doneA = isActionDone(a) ? 1 : 0;
+      const doneB = isActionDone(b) ? 1 : 0;
       if (doneA !== doneB) return doneA - doneB;
       return (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9);
     });
@@ -2625,7 +2636,7 @@ function getAllActionsForDeal(dealName) {
 
 function getNextActionForDeal(dealName) {
   const all = getAllActionsForDeal(dealName);
-  const pending = all.filter(a => !actionDoneSet.has(a._idx));
+  const pending = all.filter(a => !isActionDone(a));
   return pending.length > 0 ? pending[0] : null;
 }
 
@@ -2761,7 +2772,7 @@ function renderActionItems() {
   }
 
   // Build indexed list
-  let items = DATA.actions.map((a, i) => ({ ...a, _idx: i, _done: actionDoneSet.has(i) }));
+  let items = DATA.actions.map((a, i) => ({ ...a, _idx: i, _done: isActionDone(i) }));
 
   // Filter
   const fPriority = document.getElementById('actionFilterPriority')?.value || '';
@@ -2849,7 +2860,7 @@ function renderActionItems() {
 
   // Update counts
   const totalVisible = items.length;
-  const totalDone = DATA.actions.filter((_, i) => actionDoneSet.has(i)).length;
+  const totalDone = DATA.actions.filter((a, i) => isActionDone(i)).length;
   document.getElementById('actionItemCount').textContent = `(${totalVisible}${totalDone > 0 ? ` / ${totalDone} done` : ''})`;
   document.getElementById('tabActionsCount').textContent = DATA.actions.length - totalDone;
 
@@ -3814,11 +3825,11 @@ function openDealEditPopover(dealName, cardElement) {
 
     if (field.type === 'linked-actions') {
       const actions = getAllActionsForDeal(deal.name);
-      let html = `<div class="deal-edit-field"><div class="deal-edit-label">${field.label} <span style="font-weight:400;opacity:0.5">(${actions.filter(a => !actionDoneSet.has(a._idx)).length} pending)</span></div>`;
+      let html = `<div class="deal-edit-field"><div class="deal-edit-label">${field.label} <span style="font-weight:400;opacity:0.5">(${actions.filter(a => !isActionDone(a)).length} pending)</span></div>`;
       if (actions.length > 0) {
         html += '<div class="linked-actions-list" id="linkedActionsList">';
         html += actions.map(a => {
-          const isDone = actionDoneSet.has(a._idx);
+          const isDone = isActionDone(a);
           const pCls = (a.priority || '').toLowerCase();
           return `<div class="linked-action-item ${isDone ? 'is-done' : ''}" data-action-idx="${a._idx}">
             <button class="linked-action-done-btn ${isDone ? 'checked' : ''}" data-idx="${a._idx}" title="${isDone ? 'Mark undone' : 'Mark done'}">&#10003;</button>
@@ -3913,7 +3924,7 @@ function openDealEditPopover(dealName, cardElement) {
       const label = container.querySelector('.deal-edit-label span');
       if (label) {
         const actions = getAllActionsForDeal(deal.name);
-        label.textContent = `(${actions.filter(a => !actionDoneSet.has(a._idx)).length} pending)`;
+        label.textContent = `(${actions.filter(a => !isActionDone(a)).length} pending)`;
       }
     });
   });
