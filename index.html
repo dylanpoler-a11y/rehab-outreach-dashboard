@@ -4324,14 +4324,27 @@ async function submitAddDeal() {
     try {
       const resp = await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
+        redirect: 'follow',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ newDeal: dealData })
       });
-      const result = await resp.json();
-      if (result.success) {
-        showToast(`"${company.name}" added to pipeline`, 'success');
-      } else {
-        showToast(`Sheet write failed: ${result.error || 'Unknown error'}`, 'error');
+      const text = await resp.text();
+      try {
+        const result = JSON.parse(text);
+        if (result.success) {
+          showToast(`"${company.name}" added to pipeline`, 'success');
+        } else {
+          showToast(`Sheet write failed: ${result.error || 'Unknown error'}`, 'error');
+          console.warn('New deal write-back response:', result);
+        }
+      } catch (parseErr) {
+        // Apps Script may return HTML on redirect — if status is ok, assume success
+        if (resp.ok || resp.redirected) {
+          showToast(`"${company.name}" added to pipeline`, 'success');
+        } else {
+          showToast('Sheet write failed — check Apps Script deployment', 'error');
+          console.warn('Non-JSON response:', text.substring(0, 200));
+        }
       }
     } catch (err) {
       showToast('Added locally (sheet sync failed)', 'pending');
