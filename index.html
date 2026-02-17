@@ -1583,11 +1583,15 @@ async function refreshData(silent = false) {
     DATA.actions = newActions;
 
     // Sync pipeline status to company objects so map/filters reflect live data
+    // First clear all pipeline flags, then set from live data
     const pipeMap = new Map(newPipeline.map(p => [p.name, p.status]));
     DATA.companies.forEach(c => {
       if (pipeMap.has(c.name)) {
         c.inPipeline = true;
         c.pipelineStatus = pipeMap.get(c.name);
+      } else {
+        c.inPipeline = false;
+        c.pipelineStatus = '';
       }
     });
 
