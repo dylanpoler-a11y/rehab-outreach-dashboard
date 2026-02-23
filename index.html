@@ -2505,6 +2505,31 @@ function applyKPIHighlight() {
 }
 
 // ============================================================
+// PIPELINE CARD ORDER (persisted via localStorage)
+// ============================================================
+function getSavedCardOrder() {
+  try { return JSON.parse(localStorage.getItem('pipelineCardOrder') || '{}'); } catch { return {}; }
+}
+function saveCardOrder() {
+  const order = {};
+  document.querySelectorAll('.pipeline-col-cards').forEach(col => {
+    const status = col.getAttribute('data-status');
+    order[status] = Array.from(col.querySelectorAll('.pipeline-card')).map(c => c.getAttribute('data-deal-name'));
+  });
+  localStorage.setItem('pipelineCardOrder', JSON.stringify(order));
+}
+function sortDealsByOrder(deals, colKey) {
+  const order = getSavedCardOrder()[colKey];
+  if (!order || order.length === 0) return deals;
+  const pos = new Map(order.map((name, i) => [name, i]));
+  return deals.slice().sort((a, b) => {
+    const pa = pos.has(a.name) ? pos.get(a.name) : 9999;
+    const pb = pos.has(b.name) ? pos.get(b.name) : 9999;
+    return pa - pb;
+  });
+}
+
+// ============================================================
 // PIPELINE BOARD
 // ============================================================
 function renderPipeline() {
@@ -2534,7 +2559,7 @@ function renderPipeline() {
   `;
 
   document.getElementById('pipelineBoard').innerHTML = PIPELINE_COLUMNS.map(col => {
-    const deals = pipe.filter(p => col.match(p.status));
+    const deals = sortDealsByOrder(pipe.filter(p => col.match(p.status)), col.key);
     return `
       <div class="pipeline-col" data-status="${col.key}">
         <div class="pipeline-col-header">
@@ -3453,7 +3478,7 @@ function initSortable() {
         const targetCol = evt.to.getAttribute('data-status');
         const sourceCol = evt.from.getAttribute('data-status');
 
-        if (targetCol === sourceCol) return;
+        if (targetCol === sourceCol) { saveCardOrder(); return; }
 
         // Check if this is a multi-card move (only if all selected are in same column)
         if (selectedCards.has(dealName) && selectedCards.size > 1 && selectedColumn === sourceCol) {
@@ -3493,6 +3518,7 @@ function initSortable() {
         }
 
         updateColumnCounts();
+        saveCardOrder();
       }
     });
   });
