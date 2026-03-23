@@ -2413,6 +2413,7 @@ function updateAll() {
   updateCharts();
   updateTable();
   updateLegend();
+  renderPipeline();
 }
 
 function updateFilterCounts() {
@@ -2533,24 +2534,69 @@ function sortDealsByOrder(deals, colKey) {
 // PIPELINE BOARD
 // ============================================================
 function renderPipeline() {
-  const pipe = DATA.pipeline;
+  let pipe = DATA.pipeline;
+  const stateFiltered = pipe && activeFilters.state.size > 0;
+
+  // Filter pipeline deals by selected states on the map
+  if (stateFiltered) {
+    const selectedAbbrs = new Set();
+    const selectedNames = new Set();
+    activeFilters.state.forEach(name => {
+      selectedNames.add(name.toUpperCase());
+      const abbr = STATE_ABBREV_JS[name];
+      if (abbr) selectedAbbrs.add(abbr.toUpperCase());
+    });
+    // Build regex that matches abbreviations as whole words (e.g. "FL" but not "FL" inside "BUFFALO")
+    const abbrPattern = selectedAbbrs.size > 0
+      ? new RegExp('(?:^|[\\s,(/])(' + Array.from(selectedAbbrs).map(a => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')(?=$|[\\s,)./])', 'i')
+      : null;
+    pipe = pipe.filter(d => {
+      const s = (d.states || '').toUpperCase();
+      if (!s) return false;
+      // Check abbreviation with word-boundary matching
+      if (abbrPattern && abbrPattern.test(s)) return true;
+      // Check full state name
+      for (const name of selectedNames) { if (s.includes(name)) return true; }
+      return false;
+    });
+  }
 
   // Clear any card selection (board is being re-rendered)
   clearCardSelection();
   if (highlightLayer) highlightLayer.clearLayers();
 
+  // Always ensure pipeline section is visible (may have been hidden by previous empty filter)
+  document.getElementById('pipelineSection').style.display = '';
+
   // Update tab counts
   document.getElementById('tabPipelineCount').textContent = pipe ? pipe.length : 0;
   document.getElementById('tabActionsCount').textContent = DATA.actions ? DATA.actions.length : 0;
 
-  if (!pipe || pipe.length === 0) { document.getElementById('pipelineSection').style.display = 'none'; return; }
+  if (!pipe || pipe.length === 0) {
+    const filterLabel = stateFiltered
+      ? Array.from(activeFilters.state).map(n => STATE_NAME_TO_ABBR[n] || n).join(', ')
+      : '';
+    document.getElementById('pipelineStats').innerHTML = '';
+    document.getElementById('pipelineBoard').innerHTML = `
+      <div style="text-align:center;padding:48px 24px;color:var(--text-secondary);grid-column:1/-1">
+        <div style="font-size:1.5rem;margin-bottom:8px">No pipeline deals${stateFiltered ? ' in ' + filterLabel : ''}</div>
+        ${stateFiltered ? '<div style="font-size:0.85rem;opacity:0.7">Click the state on the map again to clear the filter</div>' : ''}
+      </div>`;
+    return;
+  }
 
   const active = pipe.filter(p => p.status.startsWith('Active')).length;
   const standby = pipe.filter(p => p.status === 'Stand By').length;
   const stalled = pipe.filter(p => p.status === 'Stalled').length;
   const newLeads = pipe.filter(p => p.status === 'New Lead').length;
 
+  const stateFilterBadge = stateFiltered
+    ? `<div class="pipeline-stat" style="background:rgba(59,130,246,0.15);color:#3b82f6;cursor:pointer;border:1px solid rgba(59,130,246,0.3);border-radius:6px" onclick="clearStateFilter()">
+        Filtered: ${Array.from(activeFilters.state).map(n => STATE_NAME_TO_ABBR[n] || n).join(', ')} ✕
+      </div>`
+    : '';
   document.getElementById('pipelineStats').innerHTML = `
+    ${stateFilterBadge}
     <div class="pipeline-stat"><strong>${pipe.length}</strong> Total Deals</div>
     <div class="pipeline-stat"><strong>${active}</strong> Active</div>
     <div class="pipeline-stat"><strong>${standby}</strong> Stand By</div>
@@ -3738,20 +3784,34 @@ function resolveNewStatus(targetColKey, originalStatus) {
 }
 
 function updateColumnCounts() {
-  const pipe = DATA.pipeline;
   document.querySelectorAll('.pipeline-col').forEach(col => {
     const cardsInCol = col.querySelectorAll('.pipeline-col-cards .pipeline-card').length;
     const countEl = col.querySelector('.pipeline-col-count');
     if (countEl) countEl.textContent = cardsInCol;
   });
 
-  const active = pipe.filter(p => p.status.startsWith('Active')).length;
-  const standby = pipe.filter(p => p.status === 'Stand By').length;
-  const stalled = pipe.filter(p => p.status === 'Stalled').length;
-  const newLeads = pipe.filter(p => p.status === 'New Lead').length;
+  // Count from DOM columns (respects current state filter)
+  const cols = document.querySelectorAll('.pipeline-col');
+  let totalVisible = 0, active = 0, standby = 0, stalled = 0, newLeads = 0;
+  cols.forEach(col => {
+    const count = col.querySelectorAll('.pipeline-col-cards .pipeline-card').length;
+    const key = col.dataset.status || '';
+    if (key.startsWith('Active')) active += count;
+    else if (key === 'Stand By') standby += count;
+    else if (key === 'Stalled') stalled += count;
+    else if (key === 'New Lead') newLeads += count;
+    totalVisible += count;
+  });
 
+  const stateFiltered = activeFilters.state.size > 0;
+  const stateFilterBadge = stateFiltered
+    ? `<div class="pipeline-stat" style="background:rgba(59,130,246,0.15);color:#3b82f6;cursor:pointer;border:1px solid rgba(59,130,246,0.3);border-radius:6px" onclick="clearStateFilter()">
+        Filtered: ${Array.from(activeFilters.state).map(n => STATE_NAME_TO_ABBR[n] || n).join(', ')} ✕
+      </div>`
+    : '';
   document.getElementById('pipelineStats').innerHTML = `
-    <div class="pipeline-stat"><strong>${pipe.length}</strong> Total Deals</div>
+    ${stateFilterBadge}
+    <div class="pipeline-stat"><strong>${totalVisible}</strong> Total Deals</div>
     <div class="pipeline-stat"><strong>${active}</strong> Active</div>
     <div class="pipeline-stat"><strong>${standby}</strong> Stand By</div>
     <div class="pipeline-stat"><strong>${newLeads}</strong> New Leads</div>
